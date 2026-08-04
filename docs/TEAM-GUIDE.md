@@ -37,7 +37,11 @@ users/{uid}
   name, email, hostelOrDept, contactPreference, photoURL
   role: 'user' | 'moderator' | 'admin'      // guest = unauthenticated, not stored
   status: 'active' | 'suspended' | 'banned'
+  verified: boolean                          // campus email confirmed
   ratingAvg: number, ratingCount: number
+  resolvedCount: number, medianReplyMins: number, strikes: number
+  trustScore: number                         // 0–100, computed server-side (see SCORING.md)
+  trustTier: 'low' | 'neutral' | 'trusted' | 'reliable' | 'star'
   createdAt
 
 users/{uid}/watchlist/{watchId}
@@ -91,7 +95,10 @@ campusZones/{zoneId}       // admin-managed reference data
 | `onClaimResolved` | on claim status change | Nidhi |
 | `confirmTransaction` | callable, both-party handshake | Hadi |
 | `setUserRole` | callable, admin-only → sets Auth custom claim | Shanid |
+| `recomputeTrustScore` | on review write / claim resolve / report upheld / nightly | Shanid |
 | `fanOutNotification` | helper, called by the above | Hadi |
+
+Scoring formulas (Trust Score + Match Score) live in [SCORING.md](SCORING.md) — full detail, anti-gaming rules, and recompute triggers.
 
 ## 3. Ownership matrix
 
@@ -121,7 +128,7 @@ The point isn't "no AI." It's: **AI writes the scaffold; you write or fully rewr
 **Own by hand — design it, understand every line:**
 
 - **Nidhi:** the matching score (category match + keyword/token overlap + zone proximity + recency + lost↔found complementarity); the data model; the security-rules logic; the claim → resolve state machine.
-- **Shanid:** the RBAC model (custom claims ↔ rules); auth edge cases (verification, reset); the moderation state machine; what the analytics actually compute.
+- **Shanid:** the RBAC model (custom claims ↔ rules); auth edge cases (verification, reset); the moderation state machine; the **trust-score formula** (SCORING.md §1) and what the analytics actually compute.
 - **Hadi:** the transaction handshake (both-confirm → sold → unlock review); the chat data model + real-time listeners; the notification fan-out.
 - **Shenza:** information architecture + navigation; the search/filter query logic; the responsive breakpoint strategy; accessibility.
 
