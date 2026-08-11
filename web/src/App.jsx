@@ -1,11 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
+
 import Navbar from './components/Navbar';
 import HeroFilters from './components/HeroFilters';
 import ItemCard from './components/ItemCard';
 import PostModal from './components/PostModal';
 import Toast from './components/Toast';
 import { INITIAL_ITEMS } from './data/mockData';
-import { SearchX, PlusCircle, Compass, Users } from 'lucide-react';
+import { SearchX, PlusCircle, Compass, Users, Moon, Sun } from 'lucide-react';
 
 export default function App() {
   const [items, setItems] = useState(INITIAL_ITEMS);
@@ -15,6 +16,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isPostOpen, setIsPostOpen] = useState(false);
   const [toast, setToast] = useState('');
+  const [darkMode, setDarkMode] = useState(false);
 
   const showToast = (msg) => {
     setToast(msg);
@@ -25,6 +27,9 @@ export default function App() {
     setItems((prev) => [item, ...prev]);
     showToast(`Posted "${item.title}" to the campus feed.`);
   };
+  useEffect(() => {
+  document.body.classList.toggle('dark', darkMode);
+  }, [darkMode]); 
 
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -164,6 +169,30 @@ export default function App() {
       </footer>
 
       <Toast message={toast} />
+
+      <button
+        onClick={() => setDarkMode((prev) => !prev)}
+        aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+        style={{
+          position: 'fixed',
+          bottom: 24,
+          left: 24,
+          width: 46,
+          height: 46,
+          borderRadius: '50%',
+          border: '1px solid var(--border-strong)',
+          background: 'var(--surface)',
+          color: 'var(--ink-heading)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          zIndex: 'var(--z-toast)',
+          boxShadow: 'var(--shadow-md)',
+        }}
+      >
+        {darkMode ? <Sun size={19} /> : <Moon size={19} />}
+      </button>
     </div>
   );
 }
