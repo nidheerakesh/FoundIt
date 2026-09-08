@@ -1,8 +1,8 @@
 // Seed the local Firestore emulator with demo data.
 // Run the emulator first, then:  node scripts/seed.mjs
 import { initializeApp } from 'firebase/app';
-import { getFirestore, connectFirestoreEmulator, collection, addDoc } from 'firebase/firestore';
-import { getAuth, connectAuthEmulator, signInAnonymously } from 'firebase/auth';
+import { getFirestore, connectFirestoreEmulator, collection, addDoc, doc, setDoc } from 'firebase/firestore';
+import { getAuth, connectAuthEmulator, signInAnonymously, createUserWithEmailAndPassword } from 'firebase/auth';
 import { INITIAL_ITEMS } from '../src/data/mockData.js';
 
 const app = initializeApp({ projectId: 'foundit-demo', apiKey: 'demo-key' });
@@ -10,6 +10,30 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 connectFirestoreEmulator(db, '127.0.0.1', 8080);
 connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
+
+// Seed a verified demo student account for instant testing
+try {
+  const cred = await createUserWithEmailAndPassword(auth, 'demo@campus.edu', 'password123');
+  await setDoc(doc(db, 'users', cred.user.uid), {
+    name: 'Nidhi Rakesh',
+    email: 'demo@campus.edu',
+    hostelOrDept: 'CSE',
+    photoURL: '',
+    role: 'user',
+    status: 'active',
+    verified: true,
+    ratingAvg: 4.9,
+    ratingCount: 14,
+    resolvedCount: 7,
+    trustScore: 82,
+    trustTier: 'reliable',
+    createdAt: Date.now(),
+  });
+  console.log('Seeded demo account: demo@campus.edu / password123');
+} catch (e) {
+  console.log('Demo user already exists or skipped:', e.code || e.message);
+}
+
 await signInAnonymously(auth); // rules require a signed-in user for writes
 
 const kw = (...p) => [...new Set(p.join(' ').toLowerCase().match(/[a-z0-9]{3,}/g) || [])].slice(0, 12);

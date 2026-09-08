@@ -5,26 +5,42 @@ import HeroFilters from './components/HeroFilters';
 import ItemCard from './components/ItemCard';
 import PostModal from './components/PostModal';
 import Toast from './components/Toast';
-import { signInAnonymously } from 'firebase/auth';
+import SmartMatchModal from './components/SmartMatchModal';
+import ClaimModal from './components/ClaimModal';
+import ChatModal from './components/ChatModal';
+import DealModal from './components/DealModal';
+import FlagModal from './components/FlagModal';
+import AIAssistantModal from './components/AIAssistantModal';
 import { INITIAL_ITEMS } from './data/mockData';
 import { useFeed } from './hooks/useFeed';
 import { addLostFound, addListing } from './lib/feed';
-import { auth } from './lib/firebase';
-import { SearchX, PlusCircle, Compass, Users, Moon, Sun } from 'lucide-react';
-
-// Stub poster until auth lands (Shanid's lane). Real uid/name come from the signed-in user.
-const STUB_POSTER = { uid: 'me', name: 'You', dept: 'CSE', verified: true, trustScore: 50 };
+import { findMatchesForItem } from './lib/matching';
+import { useAuth } from './auth/AuthContext';
+import AuthModal from './auth/AuthModal';
+import AccountMenu from './auth/AccountMenu';
+import VerifyBanner from './auth/VerifyBanner';
+import { SearchX, PlusCircle, Compass, Users, Moon, Sun, Sparkles } from 'lucide-react';
 
 export default function App() {
+  const { isAuthed, isVerified, poster, user } = useAuth();
   const { items: liveItems, loading, error } = useFeed();
   // Fall back to mock data if the emulator/backend isn't reachable, so dev never breaks.
-  const items = error ? INITIAL_ITEMS : liveItems;
+  const items = error || (!loading && liveItems.length === 0) ? INITIAL_ITEMS : liveItems;
 
   const [activeTab, setActiveTab] = useState('all'); // all | lost_found | marketplace
   const [selectedLocation, setSelectedLocation] = useState('All Campus Locations');
   const [selectedCategory, setSelectedCategory] = useState('All Categories');
   const [searchQuery, setSearchQuery] = useState('');
   const [isPostOpen, setIsPostOpen] = useState(false);
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [isAIOpen, setIsAIOpen] = useState(false);
+  const [activeItem, setActiveItem] = useState(null);
+  const [activeMatchResult, setActiveMatchResult] = useState(null);
+  const [isClaimOpen, setIsClaimOpen] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isDealOpen, setIsDealOpen] = useState(false);
+  const [isFlagOpen, setIsFlagOpen] = useState(false);
+  const [isSmartMatchOpen, setIsSmartMatchOpen] = useState(false);
   const [toast, setToast] = useState('');
   const [darkMode, setDarkMode] = useState(false);
 
@@ -33,23 +49,63 @@ export default function App() {
     setTimeout(() => setToast(''), 3200);
   };
 
+  // Only signed-in + verified users can post (SRS FR-1).
+  const openPost = () => {
+    if (!isAuthed) { showToast('Sign in with your campus account to post.'); setIsAuthOpen(true); return; }
+    if (!isVerified) { showToast('Verify your email before posting.'); return; }
+    setIsPostOpen(true);
+  };
+
+  const handleOpenClaim = (target) => {
+    if (!isAuthed) { showToast('Sign in with your campus account to claim items.'); setIsAuthOpen(true); return; }
+    setActiveItem(target);
+    setIsClaimOpen(true);
+  };
+
+  const handleOpenChat = (target) => {
+    if (!isAuthed) { showToast('Sign in with your campus account to message students.'); setIsAuthOpen(true); return; }
+    setActiveItem(target);
+    setIsChatOpen(true);
+  };
+
+  const handleOpenHandshake = (target) => {
+    if (!isAuthed) { showToast('Sign in with your campus account to propose a deal.'); setIsAuthOpen(true); return; }
+    setActiveItem(target);
+    setIsDealOpen(true);
+  };
+
+  const handleOpenFlag = (target) => {
+    if (!isAuthed) { showToast('Sign in with your campus account to report content.'); setIsAuthOpen(true); return; }
+    setActiveItem(target);
+    setIsFlagOpen(true);
+  };
+
+  const handleOpenSmartMatch = (target) => {
+    const candidateMatches = findMatchesForItem(target, items);
+    setActiveItem(target);
+    setActiveMatchResult(candidateMatches[0] || null);
+    setIsSmartMatchOpen(true);
+  };
+
   const addItem = async (form) => {
     try {
-      if (form.type === 'marketplace') await addListing(form, STUB_POSTER);
-      else await addLostFound(form, STUB_POSTER);
+      const activePoster = poster || {
+        uid: user?.uid || 'guest-uid',
+        name: user?.displayName || (user?.email || '').split('@')[0] || 'Student',
+        dept: 'Campus',
+        verified: !!user?.emailVerified,
+        trustScore: 50,
+      };
+      if (form.type === 'marketplace') await addListing(form, activePoster);
+      else await addLostFound(form, activePoster);
       showToast(`Posted "${form.title}" to the campus feed.`);
     } catch (err) {
-      showToast(`Could not post — is the Firebase emulator running? (${err.code || err.message})`);
+      showToast(`Could not post — ${err.code || err.message}`);
     }
   };
   useEffect(() => {
   document.body.classList.toggle('dark', darkMode);
   }, [darkMode]);
-
-  // TEMP: anonymous sign-in so writes pass security rules until real auth (Shanid) lands.
-  useEffect(() => {
-    signInAnonymously(auth).catch(() => {});
-  }, []);
 
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -58,13 +114,21 @@ export default function App() {
       if (activeTab === 'marketplace' && item.type !== 'marketplace') return false;
 
       if (selectedLocation !== 'All Campus Locations') {
-        const key = selectedLocation.toLowerCase().split(' ')[0];
-        if (!item.location.toLowerCase().includes(key)) return false;
+        const targetLoc = selectedLocation.toLowerCase();
+        const itemLoc = (item.location || '').toLowerCase();
+        const locKeywords = targetLoc
+          .replace(/[&(),]/g, ' ')
+          .split(/\s+/)
+          .filter((w) => w.length > 2 && w !== 'complex' && w !== 'central' && w !== 'all');
+        const matches = itemLoc.includes(targetLoc) ||
+          targetLoc.includes(itemLoc) ||
+          locKeywords.some((w) => itemLoc.includes(w));
+        if (!matches) return false;
       }
       if (selectedCategory !== 'All Categories' && item.category !== selectedCategory) return false;
 
       if (q) {
-        const hay = [item.title, item.description, item.location, ...(item.tags || [])]
+        const hay = [item.title || '', item.description || '', item.location || '', ...(item.tags || [])]
           .join(' ')
           .toLowerCase();
         if (!hay.includes(q)) return false;
@@ -98,9 +162,13 @@ export default function App() {
         setActiveTab={setActiveTab}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
-        onOpenPost={() => setIsPostOpen(true)}
+        onOpenPost={openPost}
         smartMatchCount={stats.matches}
+        accountSlot={<AccountMenu onLogin={() => setIsAuthOpen(true)} />}
+        onOpenAI={() => setIsAIOpen(true)}
       />
+
+      {isAuthed && !isVerified && <VerifyBanner />}
 
       <HeroFilters
         selectedLocation={selectedLocation}
@@ -150,7 +218,7 @@ export default function App() {
             <p style={{ color: 'var(--ink-secondary)', fontSize: 'var(--text-sm)', margin: '8px 0 20px' }}>
               Try adjusting your search, location, or category.
             </p>
-            <button onClick={() => setIsPostOpen(true)} className="btn btn-primary">
+            <button onClick={openPost} className="btn btn-primary">
               <PlusCircle size={16} /> Post the first report
             </button>
           </div>
@@ -168,11 +236,11 @@ export default function App() {
                 key={item.id}
                 item={item}
                 index={i}
-                onClaim={(i) => showToast(`Claim started for "${i.title}". (chat opens in Phase 2)`)}
-                onChat={(i) => showToast(`Opening chat with ${i.reporter}. (Phase 2)`)}
-                onHandshake={(i) => showToast(`Deal handshake for "${i.title}". (Phase 2)`)}
-                onFlag={(i) => showToast(`Flagged "${i.title}" for moderator review.`)}
-                onSmartMatch={(i) => showToast(`Smart match: "${i.title}" — ${i.matchScore}% confidence.`)}
+                onClaim={handleOpenClaim}
+                onChat={handleOpenChat}
+                onHandshake={handleOpenHandshake}
+                onFlag={handleOpenFlag}
+                onSmartMatch={handleOpenSmartMatch}
               />
             ))}
           </div>
@@ -180,6 +248,60 @@ export default function App() {
       </main>
 
       <PostModal isOpen={isPostOpen} onClose={() => setIsPostOpen(false)} onSubmit={addItem} />
+      <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} />
+
+      <ClaimModal
+        isOpen={isClaimOpen}
+        onClose={() => setIsClaimOpen(false)}
+        item={activeItem}
+        user={poster || user}
+        onClaimSuccess={(msg) => showToast(msg)}
+        onOpenChat={(it) => handleOpenChat(it)}
+      />
+
+      <ChatModal
+        isOpen={isChatOpen}
+        onClose={() => setIsChatOpen(false)}
+        item={activeItem}
+        currentUser={poster || user}
+      />
+
+      <DealModal
+        isOpen={isDealOpen}
+        onClose={() => setIsDealOpen(false)}
+        listing={activeItem}
+        currentUser={poster || user}
+        onDealSuccess={(msg) => showToast(msg)}
+        onOpenChat={(it) => handleOpenChat(it)}
+      />
+
+      <FlagModal
+        isOpen={isFlagOpen}
+        onClose={() => setIsFlagOpen(false)}
+        item={activeItem}
+        currentUser={poster || user}
+        onFlagSuccess={(msg) => showToast(msg)}
+      />
+
+      <SmartMatchModal
+        isOpen={isSmartMatchOpen}
+        onClose={() => setIsSmartMatchOpen(false)}
+        targetItem={activeItem}
+        matchResult={activeMatchResult}
+        onOpenChat={(it) => handleOpenChat(it)}
+        onOpenClaim={(it) => handleOpenClaim(it)}
+      />
+
+      <AIAssistantModal
+        isOpen={isAIOpen}
+        onClose={() => setIsAIOpen(false)}
+        allItems={items}
+        onSelectItem={(item) => {
+          if (item.matchScore) handleOpenSmartMatch(item);
+          else if (item.type === 'marketplace') handleOpenHandshake(item);
+          else handleOpenClaim(item);
+        }}
+      />
 
       <footer
         style={{ maxWidth: 1200, margin: '24px auto', padding: '0 16px', width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16, borderTop: '1px solid var(--border)', paddingTop: 20 }}
