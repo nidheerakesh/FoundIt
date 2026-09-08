@@ -5,11 +5,21 @@ import HeroFilters from './components/HeroFilters';
 import ItemCard from './components/ItemCard';
 import PostModal from './components/PostModal';
 import Toast from './components/Toast';
+import { signInAnonymously } from 'firebase/auth';
 import { INITIAL_ITEMS } from './data/mockData';
+import { useFeed } from './hooks/useFeed';
+import { addLostFound, addListing } from './lib/feed';
+import { auth } from './lib/firebase';
 import { SearchX, PlusCircle, Compass, Users, Moon, Sun } from 'lucide-react';
 
+// Stub poster until auth lands (Shanid's lane). Real uid/name come from the signed-in user.
+const STUB_POSTER = { uid: 'me', name: 'You', dept: 'CSE', verified: true, trustScore: 50 };
+
 export default function App() {
-  const [items, setItems] = useState(INITIAL_ITEMS);
+  const { items: liveItems, loading, error } = useFeed();
+  // Fall back to mock data if the emulator/backend isn't reachable, so dev never breaks.
+  const items = error ? INITIAL_ITEMS : liveItems;
+
   const [activeTab, setActiveTab] = useState('all'); // all | lost_found | marketplace
   const [selectedLocation, setSelectedLocation] = useState('All Campus Locations');
   const [selectedCategory, setSelectedCategory] = useState('All Categories');
@@ -23,13 +33,23 @@ export default function App() {
     setTimeout(() => setToast(''), 3200);
   };
 
-  const addItem = (item) => {
-    setItems((prev) => [item, ...prev]);
-    showToast(`Posted "${item.title}" to the campus feed.`);
+  const addItem = async (form) => {
+    try {
+      if (form.type === 'marketplace') await addListing(form, STUB_POSTER);
+      else await addLostFound(form, STUB_POSTER);
+      showToast(`Posted "${form.title}" to the campus feed.`);
+    } catch (err) {
+      showToast(`Could not post — is the Firebase emulator running? (${err.code || err.message})`);
+    }
   };
   useEffect(() => {
   document.body.classList.toggle('dark', darkMode);
-  }, [darkMode]); 
+  }, [darkMode]);
+
+  // TEMP: anonymous sign-in so writes pass security rules until real auth (Shanid) lands.
+  useEffect(() => {
+    signInAnonymously(auth).catch(() => {});
+  }, []);
 
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -113,8 +133,17 @@ export default function App() {
           )}
         </div>
 
-        {/* Grid or empty */}
-        {filtered.length === 0 ? (
+        {/* Loading / grid / empty */}
+        {loading && !error ? (
+          <div
+            style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 24, marginBottom: 48 }}
+            aria-busy="true"
+          >
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="surface" style={{ height: 280, opacity: 0.5 }} />
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="surface" style={{ padding: '60px 20px', textAlign: 'center', margin: '20px 0' }}>
             <SearchX size={44} color="var(--ink-muted)" style={{ margin: '0 auto 16px' }} />
             <h3 style={{ fontSize: 'var(--text-md)', fontWeight: 700 }}>Nothing matches your filters</h3>
