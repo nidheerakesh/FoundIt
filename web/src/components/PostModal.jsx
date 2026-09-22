@@ -26,28 +26,20 @@ export default function PostModal({ isOpen, onClose, onSubmit }) {
   const isMarket = form.type === 'marketplace';
   const valid = form.title.trim() && form.description.trim();
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
     if (!valid) return;
-    const item = {
-      id: `item-${Date.now()}`,
+    // Emit the raw form; App writes it to the right Firestore collection.
+    await onSubmit({
       type: form.type,
       title: form.title.trim(),
       category: form.category,
       location: form.location,
-      date: 'Just now',
       description: form.description.trim(),
-      reporter: 'You',
-      dept: 'CSE',
-      verified: true,
-      trustScore: 50,
-      status: isMarket ? 'Available' : 'Active',
-      tags: [],
-      ...(isMarket
-        ? { price: Number(form.price) || 0, listingType: form.listingType, condition: 'Good Condition' }
-        : { matchScore: null }),
-    };
-    onSubmit(item);
+      price: form.price,
+      listingType: form.listingType,
+      condition: 'Good Condition',
+    });
     setForm(EMPTY);
     onClose();
   };
