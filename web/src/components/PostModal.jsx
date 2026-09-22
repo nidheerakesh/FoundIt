@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { X, PlusCircle } from 'lucide-react';
+import { X, PlusCircle, Sparkles } from 'lucide-react';
 import { CATEGORIES, CAMPUS_LOCATIONS } from '../data/mockData';
+import { generatePostAssistance } from '../lib/ai';
 
 const TYPES = [
   { key: 'lost', label: 'Lost item', cls: 'badge-lost' },
@@ -20,11 +21,42 @@ const EMPTY = {
 
 export default function PostModal({ isOpen, onClose, onSubmit }) {
   const [form, setForm] = useState(EMPTY);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiNote, setAiNote] = useState('');
   if (!isOpen) return null;
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const isMarket = form.type === 'marketplace';
   const valid = form.title.trim() && form.description.trim();
+
+  const handleAiAssist = async () => {
+    if (!form.title.trim() && !form.description.trim()) {
+      setAiNote('Type a word or rough title first (e.g. "umbrella" or "math book")');
+      return;
+    }
+    setAiBusy(true);
+    setAiNote('');
+    try {
+      const res = await generatePostAssistance({
+        title: form.title,
+        description: form.description,
+        category: form.category,
+        type: form.type,
+      });
+      setForm((f) => ({
+        ...f,
+        title: res.title || f.title,
+        category: res.category || f.category,
+        description: res.description || f.description,
+        price: f.type === 'marketplace' && (!f.price || f.price === '') && res.suggestedPrice ? res.suggestedPrice : f.price,
+      }));
+      setAiNote('✨ AI enhanced your report with tags & categories!');
+    } catch (err) {
+      setAiNote('Could not auto-fill. Please enter manually.');
+    } finally {
+      setAiBusy(false);
+    }
+  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -41,6 +73,7 @@ export default function PostModal({ isOpen, onClose, onSubmit }) {
       condition: 'Good Condition',
     });
     setForm(EMPTY);
+    setAiNote('');
     onClose();
   };
 
@@ -80,6 +113,33 @@ export default function PostModal({ isOpen, onClose, onSubmit }) {
             );
           })}
         </div>
+
+        {/* AI Assist helper banner */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+          <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--ink-secondary)' }}>
+            Report Information
+          </span>
+          <button
+            type="button"
+            onClick={handleAiAssist}
+            className="btn btn-ghost btn-sm"
+            disabled={aiBusy}
+            style={{
+              color: 'var(--accent)',
+              padding: '3px 10px',
+              fontSize: 'var(--text-xs)',
+              background: 'rgba(22, 101, 52, 0.08)',
+              borderRadius: 'var(--radius-full)',
+            }}
+          >
+            <Sparkles size={13} /> {aiBusy ? 'AI generating…' : '✨ AI Auto-fill & Polish'}
+          </button>
+        </div>
+        {aiNote && (
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--found)', marginBottom: 10, fontStyle: 'italic' }}>
+            {aiNote}
+          </div>
+        )}
 
         <Field label="Title">
           <input className="input" value={form.title} onChange={set('title')} placeholder="e.g. Blue water bottle with stickers" autoFocus />

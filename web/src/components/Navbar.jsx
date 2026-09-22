@@ -13,6 +13,8 @@ export default function Navbar({
   setSearchQuery,
   onOpenPost,
   smartMatchCount,
+  accountSlot,
+  onOpenAI,
 }) {
   return (
     <header
@@ -95,6 +97,26 @@ export default function Navbar({
 
       {/* Actions */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button
+          type="button"
+          onClick={onOpenAI}
+          className="btn btn-ghost btn-sm"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            background: 'rgba(22, 101, 52, 0.08)',
+            color: 'var(--accent)',
+            fontWeight: 700,
+            padding: '5px 12px',
+            borderRadius: 'var(--radius-full)',
+            border: '1px solid rgba(22, 101, 52, 0.25)',
+          }}
+          title="Open FoundIt AI Assistant"
+        >
+          <Sparkles size={14} /> AI Search
+        </button>
+
         {smartMatchCount > 0 && (
           <span className="badge badge-match" title="Smart match suggestions">
             <Sparkles size={13} /> {smartMatchCount} match{smartMatchCount === 1 ? '' : 'es'}
@@ -103,6 +125,7 @@ export default function Navbar({
         <button className="btn btn-primary btn-sm" onClick={onOpenPost}>
           <PlusCircle size={15} /> Post
         </button>
+        {accountSlot}
       </div>
     </header>
   );
