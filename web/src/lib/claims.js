@@ -46,17 +46,12 @@ export function subscribeClaims(itemId, cb) {
   });
 }
 
-/** Resolve a claim (Approve or Reject). */
+/**
+ * Resolve a claim (Approve or Reject). Only the claim status is written here —
+ * the `onClaimResolved` Cloud Function owns the item status, resolvedCount, trust
+ * recompute, and notifications (server-authoritative; see functions/index.js).
+ */
 export async function resolveClaim(itemId, claimId, status) {
   const claimRef = doc(db, COL.lostFoundItems, itemId, 'claims', claimId);
   await updateDoc(claimRef, { status });
-
-  if (status === 'approved') {
-    // Mark the lost & found item as claimed/resolved
-    const itemRef = doc(db, COL.lostFoundItems, itemId);
-    await updateDoc(itemRef, {
-      status: 'resolved',
-      resolvedAt: serverTimestamp(),
-    });
-  }
 }

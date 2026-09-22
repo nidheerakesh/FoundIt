@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { X, Handshake, Star, CheckCircle, ShieldCheck, MapPin, Send } from 'lucide-react';
-import { makeDealOffer, markListingSold, submitReview } from '../lib/deals';
+import { makeDealOffer, confirmDeal, submitReview } from '../lib/deals';
 import { CAMPUS_LOCATIONS } from '../data/mockData';
 
 export default function DealModal({
@@ -54,7 +54,8 @@ export default function DealModal({
     setError('');
     try {
       const sellerUid = listing.sellerUid || 'seed-user';
-      await markListingSold(listing.id);
+      // Confirm the deal (server marks it sold once both parties confirm).
+      await confirmDeal(listing.id);
       await submitReview(
         {
           listingId: listing.id,
