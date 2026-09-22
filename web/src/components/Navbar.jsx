@@ -45,7 +45,7 @@ export default function Navbar({
         >
           <Compass size={19} />
         </div>
-        <div style={{ fontWeight: 800, fontSize: 'var(--text-md)', letterSpacing: '-0.02em' }}>
+        <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'var(--text-lg)', letterSpacing: '-0.01em' }}>
           FoundIt
         </div>
       </div>

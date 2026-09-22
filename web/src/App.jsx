@@ -42,7 +42,11 @@ export default function App() {
   const [isFlagOpen, setIsFlagOpen] = useState(false);
   const [isSmartMatchOpen, setIsSmartMatchOpen] = useState(false);
   const [toast, setToast] = useState('');
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('foundit-theme');
+    if (saved) return saved === 'dark';
+    return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
+  });
 
   const showToast = (msg) => {
     setToast(msg);
@@ -104,7 +108,8 @@ export default function App() {
     }
   };
   useEffect(() => {
-  document.body.classList.toggle('dark', darkMode);
+    document.body.classList.toggle('dark', darkMode);
+    localStorage.setItem('foundit-theme', darkMode ? 'dark' : 'light');
   }, [darkMode]);
 
   const filtered = useMemo(() => {
