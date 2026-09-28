@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import { X, Sparkles, MapPin, Tag, CheckCircle2, MessageSquare, ShieldCheck, ArrowRight, HelpCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, Sparkles, MapPin, Tag, CheckCircle2, MessageSquare, ShieldCheck, ArrowRight, HelpCircle, Brain } from 'lucide-react';
 import TrustBadge from './TrustBadge';
-import { generateVerificationQuestions } from '../lib/ai';
+import { generateVerificationQuestions, explainMatch } from '../lib/ai';
 
 export default function SmartMatchModal({
   isOpen,
@@ -13,6 +13,16 @@ export default function SmartMatchModal({
 }) {
   const [aiQuestions, setAiQuestions] = useState([]);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
+  const [matchExplanation, setMatchExplanation] = useState(null);
+
+  useEffect(() => {
+    if (isOpen && targetItem && matchResult?.candidate) {
+      explainMatch(targetItem, matchResult.candidate, matchResult.score || targetItem.matchScore || 0)
+        .then(setMatchExplanation);
+    } else {
+      setMatchExplanation(null);
+    }
+  }, [isOpen, targetItem?.id]);
 
   if (!isOpen || !targetItem) return null;
 
@@ -193,6 +203,21 @@ export default function SmartMatchModal({
             marginBottom: 20,
           }}
         >
+          {/* AI Match Explanation */}
+          {matchExplanation && (
+            <div style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 'var(--radius-md)', background: 'rgba(22, 101, 52, 0.06)', border: '1px solid rgba(22, 101, 52, 0.12)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 'var(--text-xs)', color: 'var(--accent)', marginBottom: 6 }}>
+                <Brain size={14} /> AI Match Analysis
+                <span className="badge badge-neutral" style={{ marginLeft: 'auto', fontSize: '0.6rem' }}>
+                  {matchExplanation.confidence} confidence
+                </span>
+              </div>
+              <p style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-secondary)', lineHeight: 1.5 }}>
+                {matchExplanation.explanation}
+              </p>
+            </div>
+          )}
+
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 'var(--text-xs)', color: 'var(--accent)' }}>
               <Sparkles size={14} /> AI Ownership Verification Assistant

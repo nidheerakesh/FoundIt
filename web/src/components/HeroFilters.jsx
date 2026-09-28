@@ -1,5 +1,6 @@
 import { MapPin, Tag, ShieldCheck } from 'lucide-react';
 import { CAMPUS_LOCATIONS, CATEGORIES } from '../data/mockData';
+import WeatherBanner from './WeatherBanner';
 
 const TABS_MOBILE = [
   { key: 'all', label: 'All' },
@@ -31,7 +32,8 @@ export default function HeroFilters({
           </p>
         </div>
 
-        {/* Quiet summary — not the big-number hero template */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
+        <WeatherBanner />
         <p style={{ fontSize: 'var(--text-sm)', color: 'var(--ink-muted)', whiteSpace: 'nowrap' }}>
           <b style={{ color: 'var(--ink-secondary)' }}>{stats.lostFound}</b> active reports
           {'  ·  '}
@@ -39,6 +41,7 @@ export default function HeroFilters({
           {'  ·  '}
           <b style={{ color: 'var(--warn)' }}>{stats.matches}</b> smart matches
         </p>
+        </div>
       </div>
 
       {/* Mobile tab switcher (hidden on desktop via CSS) */}

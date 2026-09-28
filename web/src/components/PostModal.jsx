@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { X, PlusCircle, Sparkles, ImagePlus, Trash2 } from 'lucide-react';
 import { CATEGORIES, CAMPUS_LOCATIONS } from '../data/mockData';
-import { generatePostAssistance } from '../lib/ai';
+import { generatePostAssistance, recognizeItemFromImage } from '../lib/ai';
 
 const TYPES = [
   { key: 'lost', label: 'Lost item', cls: 'badge-lost' },
@@ -247,13 +247,27 @@ export default function PostModal({ isOpen, onClose, onSubmit }) {
             type="file"
             accept="image/*"
             style={{ display: 'none' }}
-            onChange={(e) => {
+            onChange={async (e) => {
               const file = e.target.files?.[0];
               if (!file) return;
               setImageFile(file);
               const reader = new FileReader();
               reader.onload = (ev) => setImagePreview(ev.target.result);
               reader.readAsDataURL(file);
+              setAiNote('🔍 Analyzing image with AI…');
+              const recognition = await recognizeItemFromImage(file);
+              if (recognition && recognition.title !== 'Item (auto-detected)') {
+                setForm((f) => ({
+                  ...f,
+                  title: recognition.title || f.title,
+                  category: recognition.category || f.category,
+                  description: recognition.description || f.description,
+                  condition: recognition.condition || f.condition,
+                }));
+                setAiNote('✨ AI recognized the item from your photo!');
+              } else {
+                setAiNote('');
+              }
             }}
           />
         </div>

@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { X, Handshake, Star, CheckCircle, ShieldCheck, MapPin, Send } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, Handshake, Star, CheckCircle, ShieldCheck, MapPin, Send, AlertTriangle } from 'lucide-react';
 import { makeDealOffer, confirmDeal, submitReview } from '../lib/deals';
 import { CAMPUS_LOCATIONS } from '../data/mockData';
+import { analyzeListingForFraud } from '../lib/ai';
 
 export default function DealModal({
   isOpen,
@@ -19,6 +20,15 @@ export default function DealModal({
   const [rating, setRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
   const [error, setError] = useState('');
+  const [fraudAnalysis, setFraudAnalysis] = useState(null);
+
+  useEffect(() => {
+    if (isOpen && listing) {
+      analyzeListingForFraud(listing).then(setFraudAnalysis);
+    } else {
+      setFraudAnalysis(null);
+    }
+  }, [isOpen, listing?.id]);
 
   if (!isOpen || !listing) return null;
 
@@ -126,6 +136,27 @@ export default function DealModal({
             {listing.listingType === 'Giveaway' || listing.price === 0 ? 'Free' : `₹${listing.price}`}
           </span>
         </div>
+
+        {/* AI Fraud Analysis */}
+        {fraudAnalysis && fraudAnalysis.riskLevel !== 'low' && (
+          <div style={{
+            padding: '10px 14px', borderRadius: 'var(--radius-md)', marginBottom: 14,
+            background: fraudAnalysis.riskLevel === 'high' ? 'rgba(220, 38, 38, 0.08)' : 'rgba(180, 83, 9, 0.08)',
+            border: `1px solid ${fraudAnalysis.riskLevel === 'high' ? 'rgba(220, 38, 38, 0.2)' : 'rgba(180, 83, 9, 0.2)'}`,
+            fontSize: 'var(--text-sm)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, marginBottom: 4, color: fraudAnalysis.riskLevel === 'high' ? 'var(--lost)' : 'var(--warn)' }}>
+              <AlertTriangle size={14} />
+              {fraudAnalysis.riskLevel === 'high' ? 'High Risk Listing' : 'Caution Advised'}
+            </div>
+            <div style={{ color: 'var(--ink-secondary)', fontSize: 'var(--text-xs)' }}>
+              {fraudAnalysis.flags.join(' · ')}
+            </div>
+            <div style={{ color: 'var(--ink-muted)', fontSize: 'var(--text-xs)', marginTop: 4, fontStyle: 'italic' }}>
+              {fraudAnalysis.recommendation}
+            </div>
+          </div>
+        )}
 
         {step === 'offer' && (
           <form onSubmit={handleProposeDeal}>
