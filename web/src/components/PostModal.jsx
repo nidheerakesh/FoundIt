@@ -9,6 +9,8 @@ const TYPES = [
   { key: 'marketplace', label: 'Sell / Give', cls: 'badge-market' },
 ];
 
+const CONDITIONS = ['Like New', 'Good Condition', 'Used - Works Fine', 'For Parts'];
+
 const EMPTY = {
   type: 'lost',
   title: '',
@@ -17,6 +19,7 @@ const EMPTY = {
   description: '',
   price: '',
   listingType: 'Sell',
+  condition: 'Good Condition',
 };
 
 export default function PostModal({ isOpen, onClose, onSubmit }) {
@@ -73,7 +76,7 @@ export default function PostModal({ isOpen, onClose, onSubmit }) {
       description: form.description.trim(),
       price: form.price,
       listingType: form.listingType,
-      condition: 'Good Condition',
+      condition: isMarket ? form.condition : '',
       imageFile: imageFile || null,
     });
     setForm(EMPTY);
@@ -169,26 +172,35 @@ export default function PostModal({ isOpen, onClose, onSubmit }) {
         </div>
 
         {isMarket && (
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <Field label="Listing type" style={{ flex: 1, minWidth: 160 }}>
-              <select className="input" value={form.listingType} onChange={set('listingType')}>
-                {['Sell', 'Rent', 'Giveaway'].map((l) => (
-                  <option key={l} value={l} style={{ background: 'var(--surface)' }}>{l}</option>
+          <>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <Field label="Listing type" style={{ flex: 1, minWidth: 160 }}>
+                <select className="input" value={form.listingType} onChange={set('listingType')}>
+                  {['Sell', 'Rent', 'Giveaway'].map((l) => (
+                    <option key={l} value={l} style={{ background: 'var(--surface)' }}>{l}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Price (₹)" style={{ flex: 1, minWidth: 160 }}>
+                <input
+                  className="input"
+                  type="number"
+                  min="0"
+                  value={form.listingType === 'Giveaway' ? 0 : form.price}
+                  onChange={set('price')}
+                  disabled={form.listingType === 'Giveaway'}
+                  placeholder="0"
+                />
+              </Field>
+            </div>
+            <Field label="Condition">
+              <select className="input" value={form.condition} onChange={set('condition')}>
+                {CONDITIONS.map((c) => (
+                  <option key={c} value={c} style={{ background: 'var(--surface)' }}>{c}</option>
                 ))}
               </select>
             </Field>
-            <Field label="Price (₹)" style={{ flex: 1, minWidth: 160 }}>
-              <input
-                className="input"
-                type="number"
-                min="0"
-                value={form.listingType === 'Giveaway' ? 0 : form.price}
-                onChange={set('price')}
-                disabled={form.listingType === 'Giveaway'}
-                placeholder="0"
-              />
-            </Field>
-          </div>
+          </>
         )}
 
         <Field label="Description">
