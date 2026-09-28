@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { LogOut, User } from 'lucide-react';
+import { LogOut, User, UserCircle } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { logout } from './authApi';
 import TrustBadge from '../components/TrustBadge';
+import NotificationBell from '../components/NotificationBell';
 
 // Navbar account control: "Sign in" when logged out; avatar + dropdown when in.
-export default function AccountMenu({ onLogin }) {
+export default function AccountMenu({ onLogin, onOpenProfile }) {
   const { isAuthed, profile } = useAuth();
   const [open, setOpen] = useState(false);
 
@@ -21,7 +22,8 @@ export default function AccountMenu({ onLogin }) {
   const initial = name.charAt(0).toUpperCase();
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 6 }}>
+      <NotificationBell />
       <button
         className="btn btn-ghost btn-sm btn-icon"
         onClick={() => setOpen((o) => !o)}
@@ -48,6 +50,9 @@ export default function AccountMenu({ onLogin }) {
                 <TrustBadge score={profile.trustScore} verified={profile.verified} size="md" />
               </div>
             )}
+            <button className="btn btn-ghost btn-sm" style={{ width: '100%', marginBottom: 6 }} onClick={() => { setOpen(false); onOpenProfile?.(); }}>
+              <UserCircle size={14} /> My Profile
+            </button>
             <button className="btn btn-ghost btn-sm" style={{ width: '100%' }} onClick={() => { setOpen(false); logout(); }}>
               <LogOut size={14} /> Sign out
             </button>

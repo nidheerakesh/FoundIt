@@ -18,5 +18,22 @@
     "ui": { "enabled": true, "port": 4000 },
     "singleProjectMode": true
   },
+  "hosting": {
+    "public": "web/dist",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ],
+    "predeploy": [
+      "npm --prefix web run build"
+    ]
+  },
   "storage": { "rules": "storage.rules" }
 }

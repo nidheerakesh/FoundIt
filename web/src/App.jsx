@@ -11,6 +11,7 @@ import ChatModal from './components/ChatModal';
 import DealModal from './components/DealModal';
 import FlagModal from './components/FlagModal';
 import AIAssistantModal from './components/AIAssistantModal';
+import ProfileModal from './components/ProfileModal';
 import { INITIAL_ITEMS } from './data/mockData';
 import { useFeed } from './hooks/useFeed';
 import { addLostFound, addListing } from './lib/feed';
@@ -41,6 +42,7 @@ export default function App() {
   const [isDealOpen, setIsDealOpen] = useState(false);
   const [isFlagOpen, setIsFlagOpen] = useState(false);
   const [isSmartMatchOpen, setIsSmartMatchOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [toast, setToast] = useState('');
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem('foundit-theme');
@@ -169,7 +171,7 @@ export default function App() {
         setSearchQuery={setSearchQuery}
         onOpenPost={openPost}
         smartMatchCount={stats.matches}
-        accountSlot={<AccountMenu onLogin={() => setIsAuthOpen(true)} />}
+        accountSlot={<AccountMenu onLogin={() => setIsAuthOpen(true)} onOpenProfile={() => setIsProfileOpen(true)} />}
         onOpenAI={() => setIsAIOpen(true)}
       />
 
@@ -181,6 +183,8 @@ export default function App() {
         selectedCategory={selectedCategory}
         setSelectedCategory={setSelectedCategory}
         stats={stats}
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
       />
 
       <main style={{ flex: 1, padding: '0 16px', maxWidth: 1200, margin: '20px auto 0', width: '100%' }}>
@@ -229,6 +233,7 @@ export default function App() {
           </div>
         ) : (
           <div
+            className="card-grid"
             style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
@@ -254,6 +259,7 @@ export default function App() {
 
       <PostModal isOpen={isPostOpen} onClose={() => setIsPostOpen(false)} onSubmit={addItem} />
       <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} />
+      <ProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
 
       <ClaimModal
         isOpen={isClaimOpen}

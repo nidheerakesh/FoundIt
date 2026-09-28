@@ -530,3 +530,69 @@ body.dark .overlay {
   background: rgba(0, 0, 0, 0.72);
 }
 
+/* ---- Responsive ---- */
+
+@media (max-width: 640px) {
+  .glass-nav {
+    padding: 8px 12px !important;
+    gap: 8px !important;
+  }
+
+  .glass-nav .brand-text {
+    font-size: var(--text-base) !important;
+  }
+
+  .hero-section {
+    padding: 24px 16px !important;
+  }
+
+  .hero-section h1 {
+    font-size: var(--text-lg) !important;
+  }
+
+  .hero-section .hero-subtitle {
+    font-size: var(--text-sm) !important;
+  }
+
+  .card-grid {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+
+  .filter-row {
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+
+  .btn-sm {
+    padding: 5px 10px;
+    font-size: 0.7rem;
+  }
+
+  .badge {
+    font-size: 0.65rem;
+    padding: 2px 7px;
+  }
+
+  .modal {
+    width: calc(100vw - 24px) !important;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .nav-tabs {
+    display: none !important;
+  }
+
+  .mobile-tabs {
+    display: flex !important;
+  }
+
+  .nav-search {
+    min-width: 0 !important;
+    flex: 1 !important;
+  }
+}
+
