@@ -18,8 +18,10 @@ const config = {
   appId: import.meta.env.VITE_FB_APP_ID || 'demo-app',
 };
 
-// Use the emulator unless explicitly turned off.
-export const USE_EMULATOR = import.meta.env.VITE_USE_EMULATOR !== 'false';
+// Use the emulator in dev mode unless explicitly turned off; never in production unless explicitly set.
+export const USE_EMULATOR = import.meta.env.DEV
+  ? import.meta.env.VITE_USE_EMULATOR !== 'false'
+  : import.meta.env.VITE_USE_EMULATOR === 'true';
 
 export const app = initializeApp(config);
 export const db = getFirestore(app);
