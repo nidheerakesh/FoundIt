@@ -129,7 +129,6 @@ export async function addLostFound(form, poster) {
     trustScore: poster.trustScore,
     matchedWith: [],
     matchScore: null,
-    imageURLs: imageURLs.length ? imageURLs : [],
     createdAt: serverTimestamp(),
   });
 }

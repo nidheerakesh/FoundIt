@@ -214,11 +214,21 @@ export default function App() {
         {/* Loading / grid / empty */}
         {loading && !error ? (
           <div
+            className="card-grid"
             style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 24, marginBottom: 48 }}
             aria-busy="true"
           >
             {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="surface" style={{ height: 280, opacity: 0.5 }} />
+              <div key={i} className="skeleton-card">
+                <div className="skeleton skeleton-badge" />
+                <div className="skeleton skeleton-line w-80" />
+                <div className="skeleton skeleton-line w-60" />
+                <div className="skeleton skeleton-line w-40" />
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
+                  <div className="skeleton skeleton-avatar" />
+                  <div className="skeleton skeleton-line w-40" style={{ flex: 1 }} />
+                </div>
+              </div>
             ))}
           </div>
         ) : filtered.length === 0 ? (
