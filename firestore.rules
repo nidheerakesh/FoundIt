@@ -1,47 +1,72 @@
 rules_version = '2';
-// FoundIt security rules. OWNER: Nidhi (pairs with Shanid on RBAC).
+// FoundIt security rules — Phase 2 lockdown. OWNER: Nidhi (pairs with Shanid on RBAC).
 //
-// STATUS: Phase-1 dev rules. Reads are open so the feed works before auth lands;
-// writes require a signed-in user. LOCK THIS DOWN in Phase 2 (docs/TEAM-GUIDE §5):
-//   - restrict reads to verified users
-//   - creates must set postedBy/sellerUid == request.auth.uid
-//   - trustScore / status / matchScore writable only by Cloud Functions (admin SDK)
-//   - reviews only after a resolved exchange (docs/SCORING §1.4)
+// Principle: the client may create/edit content it owns, but SERVER-OWNED fields
+// (trust, status, matchScore, ratings, roles, strikes) are writable only by Cloud
+// Functions, which use the Admin SDK and bypass these rules. Clients that try to
+// set those fields are rejected here.
 service cloud.firestore {
   match /databases/{database}/documents {
 
     function signedIn() { return request.auth != null; }
+    function isVerified() { return signedIn() && request.auth.token.email_verified == true; }
+    function hasRole(r) { return signedIn() && request.auth.token.role == r; }
+    function isMod() { return hasRole('moderator') || hasRole('admin'); }
+    // A field keeps its previous value (or stays absent) across an update.
+    function keeps(field) {
+      return request.resource.data.get(field, null) == resource.data.get(field, null);
+    }
 
-    // Public reference data — read-only to clients.
-    match /categories/{id}  { allow read: if true; allow write: if false; }
-    match /campusZones/{id}  { allow read: if true; allow write: if false; }
+    // Public reference data — read-only to clients (seeded/admin via console/functions).
+    match /categories/{id} { allow read: if true; allow write: if false; }
+    match /campusZones/{id} { allow read: if true; allow write: if false; }
 
-    // User profiles — anyone can read (feed shows names/trust); you edit only your own.
+    // User profiles — public read; you edit only your own, and only profile fields.
     match /users/{uid} {
       allow read: if true;
-      allow create, update: if signedIn() && request.auth.uid == uid;
+      allow create: if signedIn() && request.auth.uid == uid;
+      allow update: if signedIn() && request.auth.uid == uid
+        && keeps('trustScore') && keeps('trustTier') && keeps('trustBreakdown')
+        && keeps('role') && keeps('status')
+        && keeps('ratingAvg') && keeps('ratingCount') && keeps('resolvedCount')
+        && keeps('strikes') && keeps('verified');
       allow delete: if false;
     }
 
     // Lost & found reports.
     match /lostFoundItems/{itemId} {
       allow read: if true;
-      allow create: if signedIn();
-      allow update, delete: if signedIn();      // TODO Phase 2: owner/mod only
+      allow create: if isVerified() && request.resource.data.postedBy == request.auth.uid;
+      // Owner/mod may edit content, but not the server-owned matching/status fields.
+      allow update: if (isMod())
+        || (signedIn() && resource.data.postedBy == request.auth.uid
+            && keeps('status') && keeps('matchScore') && keeps('matchedWith') && keeps('flagCount'));
+      allow delete: if isMod() || (signedIn() && resource.data.postedBy == request.auth.uid);
+
+      // Claims: claimant creates their own; only the item owner or a mod resolves it.
       match /claims/{claimId} {
         allow read: if true;
-        allow create, update: if signedIn();
+        allow create: if isVerified() && request.resource.data.claimantUid == request.auth.uid;
+        allow update: if isMod()
+          || (signedIn() && get(/databases/$(database)/documents/lostFoundItems/$(itemId)).data.postedBy == request.auth.uid);
+        allow delete: if false;
       }
     }
 
     // Marketplace listings.
     match /listings/{listingId} {
       allow read: if true;
-      allow create: if signedIn();
-      allow update, delete: if signedIn();      // TODO Phase 2: owner/mod only
+      allow create: if isVerified() && request.resource.data.sellerUid == request.auth.uid;
+      // status/soldAt/confirmations/reviewUnlocked are function-owned. Owner may edit
+      // other fields (e.g. lastOffer for the handshake is written by buyer — allow both).
+      allow update: if isMod()
+        || (signedIn()
+            && keeps('status') && keeps('soldAt') && keeps('reviewUnlocked')
+            && keeps('flagCount'));
+      allow delete: if isMod() || (signedIn() && resource.data.sellerUid == request.auth.uid);
     }
 
-    // Chats — only participants (locked down even in dev).
+    // Chats — participants only.
     match /chats/{chatId} {
       allow read, update: if signedIn() && request.auth.uid in resource.data.participants;
       allow create: if signedIn() && request.auth.uid in request.resource.data.participants;
@@ -51,8 +76,30 @@ service cloud.firestore {
       }
     }
 
-    match /reviews/{id}       { allow read: if true; allow create: if signedIn(); }
-    match /flags/{id}         { allow read: if signedIn(); allow create: if signedIn(); }
-    match /notifications/{id} { allow read: if signedIn() && request.auth.uid == resource.data.userId; allow write: if signedIn(); }
+    // Reviews — only the rater, valid rating, not self, and only after a completed
+    // deal (the referenced listing is sold). Trust math runs server-side.
+    match /reviews/{id} {
+      allow read: if true;
+      allow create: if isVerified()
+        && request.resource.data.raterUid == request.auth.uid
+        && request.resource.data.raterUid != request.resource.data.rateeUid
+        && request.resource.data.rating is number
+        && request.resource.data.rating >= 1 && request.resource.data.rating <= 5
+        && get(/databases/$(database)/documents/listings/$(request.resource.data.contextRef)).data.status == 'sold';
+      allow update, delete: if false;
+    }
+
+    // Flags — reporter creates their own; only mods read/resolve.
+    match /flags/{id} {
+      allow read: if isMod();
+      allow create: if signedIn() && request.resource.data.reporterUid == request.auth.uid;
+      allow update, delete: if isMod();
+    }
+
+    // Notifications — read your own; writes are function-only.
+    match /notifications/{id} {
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow write: if false;
+    }
   }
 }

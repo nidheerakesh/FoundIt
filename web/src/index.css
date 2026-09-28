@@ -31,8 +31,9 @@
   --radius-lg: 18px;
   --radius-full: 9999px;
 
-  /* Typography */
-  --font: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  /* Typography — cute + rounded: Baloo 2 for headings, Nunito for body/UI */
+  --font: 'Nunito', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: 'Baloo 2', 'Nunito', sans-serif;
 
   --text-xs: 0.75rem;
   --text-sm: 0.8125rem;
@@ -81,14 +82,15 @@ h1,
 h2,
 h3,
 h4 {
+  font-family: var(--font-display);
   color: var(--ink-heading);
-  letter-spacing: -0.025em;
+  letter-spacing: -0.005em;
   text-wrap: balance;
   font-weight: 700;
 }
 
 h1 {
-  letter-spacing: -0.035em;
+  letter-spacing: -0.01em;
 }
 
 p {
@@ -526,5 +528,115 @@ body.dark .input:focus {
 
 body.dark .overlay {
   background: rgba(0, 0, 0, 0.72);
+}
+
+/* ---- Skeleton loading ---- */
+
+@keyframes shimmer {
+  from { background-position: -400px 0; }
+  to { background-position: 400px 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--surface-raised) 25%, var(--surface-hover) 50%, var(--surface-raised) 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.5s infinite ease-in-out;
+  border-radius: var(--radius-md);
+}
+
+.skeleton-card {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.skeleton-card .skeleton-line {
+  height: 14px;
+  border-radius: 6px;
+}
+
+.skeleton-card .skeleton-line.w-60 { width: 60%; }
+.skeleton-card .skeleton-line.w-80 { width: 80%; }
+.skeleton-card .skeleton-line.w-40 { width: 40%; }
+
+.skeleton-card .skeleton-badge {
+  width: 60px;
+  height: 22px;
+  border-radius: var(--radius-full);
+}
+
+.skeleton-card .skeleton-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+}
+
+/* ---- Responsive ---- */
+
+@media (max-width: 640px) {
+  .glass-nav {
+    padding: 8px 12px !important;
+    gap: 8px !important;
+  }
+
+  .glass-nav .brand-text {
+    font-size: var(--text-base) !important;
+  }
+
+  .hero-section {
+    padding: 24px 16px !important;
+  }
+
+  .hero-section h1 {
+    font-size: var(--text-lg) !important;
+  }
+
+  .hero-section .hero-subtitle {
+    font-size: var(--text-sm) !important;
+  }
+
+  .card-grid {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+
+  .filter-row {
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+
+  .btn-sm {
+    padding: 5px 10px;
+    font-size: 0.7rem;
+  }
+
+  .badge {
+    font-size: 0.65rem;
+    padding: 2px 7px;
+  }
+
+  .modal {
+    width: calc(100vw - 24px) !important;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .nav-tabs {
+    display: none !important;
+  }
+
+  .mobile-tabs {
+    display: flex !important;
+  }
+
+  .nav-search {
+    min-width: 0 !important;
+    flex: 1 !important;
+  }
 }
 

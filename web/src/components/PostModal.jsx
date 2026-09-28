@@ -1,12 +1,15 @@
-import { useState } from 'react';
-import { X, PlusCircle } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { X, PlusCircle, Sparkles, ImagePlus, Trash2 } from 'lucide-react';
 import { CATEGORIES, CAMPUS_LOCATIONS } from '../data/mockData';
+import { generatePostAssistance } from '../lib/ai';
 
 const TYPES = [
   { key: 'lost', label: 'Lost item', cls: 'badge-lost' },
   { key: 'found', label: 'Found item', cls: 'badge-found' },
   { key: 'marketplace', label: 'Sell / Give', cls: 'badge-market' },
 ];
+
+const CONDITIONS = ['Like New', 'Good Condition', 'Used - Works Fine', 'For Parts'];
 
 const EMPTY = {
   type: 'lost',
@@ -16,15 +19,50 @@ const EMPTY = {
   description: '',
   price: '',
   listingType: 'Sell',
+  condition: 'Good Condition',
 };
 
 export default function PostModal({ isOpen, onClose, onSubmit }) {
   const [form, setForm] = useState(EMPTY);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiNote, setAiNote] = useState('');
+  const [imagePreview, setImagePreview] = useState(null);
+  const [imageFile, setImageFile] = useState(null);
+  const fileRef = useRef(null);
   if (!isOpen) return null;
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const isMarket = form.type === 'marketplace';
   const valid = form.title.trim() && form.description.trim();
+
+  const handleAiAssist = async () => {
+    if (!form.title.trim() && !form.description.trim()) {
+      setAiNote('Type a word or rough title first (e.g. "umbrella" or "math book")');
+      return;
+    }
+    setAiBusy(true);
+    setAiNote('');
+    try {
+      const res = await generatePostAssistance({
+        title: form.title,
+        description: form.description,
+        category: form.category,
+        type: form.type,
+      });
+      setForm((f) => ({
+        ...f,
+        title: res.title || f.title,
+        category: res.category || f.category,
+        description: res.description || f.description,
+        price: f.type === 'marketplace' && (!f.price || f.price === '') && res.suggestedPrice ? res.suggestedPrice : f.price,
+      }));
+      setAiNote('✨ AI enhanced your report with tags & categories!');
+    } catch (err) {
+      setAiNote('Could not auto-fill. Please enter manually.');
+    } finally {
+      setAiBusy(false);
+    }
+  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -38,9 +76,13 @@ export default function PostModal({ isOpen, onClose, onSubmit }) {
       description: form.description.trim(),
       price: form.price,
       listingType: form.listingType,
-      condition: 'Good Condition',
+      condition: isMarket ? form.condition : '',
+      imageFile: imageFile || null,
     });
     setForm(EMPTY);
+    setAiNote('');
+    setImagePreview(null);
+    setImageFile(null);
     onClose();
   };
 
@@ -81,6 +123,33 @@ export default function PostModal({ isOpen, onClose, onSubmit }) {
           })}
         </div>
 
+        {/* AI Assist helper banner */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+          <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--ink-secondary)' }}>
+            Report Information
+          </span>
+          <button
+            type="button"
+            onClick={handleAiAssist}
+            className="btn btn-ghost btn-sm"
+            disabled={aiBusy}
+            style={{
+              color: 'var(--accent)',
+              padding: '3px 10px',
+              fontSize: 'var(--text-xs)',
+              background: 'rgba(22, 101, 52, 0.08)',
+              borderRadius: 'var(--radius-full)',
+            }}
+          >
+            <Sparkles size={13} /> {aiBusy ? 'AI generating…' : '✨ AI Auto-fill & Polish'}
+          </button>
+        </div>
+        {aiNote && (
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--found)', marginBottom: 10, fontStyle: 'italic' }}>
+            {aiNote}
+          </div>
+        )}
+
         <Field label="Title">
           <input className="input" value={form.title} onChange={set('title')} placeholder="e.g. Blue water bottle with stickers" autoFocus />
         </Field>
@@ -103,26 +172,35 @@ export default function PostModal({ isOpen, onClose, onSubmit }) {
         </div>
 
         {isMarket && (
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <Field label="Listing type" style={{ flex: 1, minWidth: 160 }}>
-              <select className="input" value={form.listingType} onChange={set('listingType')}>
-                {['Sell', 'Rent', 'Giveaway'].map((l) => (
-                  <option key={l} value={l} style={{ background: 'var(--surface)' }}>{l}</option>
+          <>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <Field label="Listing type" style={{ flex: 1, minWidth: 160 }}>
+                <select className="input" value={form.listingType} onChange={set('listingType')}>
+                  {['Sell', 'Rent', 'Giveaway'].map((l) => (
+                    <option key={l} value={l} style={{ background: 'var(--surface)' }}>{l}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Price (₹)" style={{ flex: 1, minWidth: 160 }}>
+                <input
+                  className="input"
+                  type="number"
+                  min="0"
+                  value={form.listingType === 'Giveaway' ? 0 : form.price}
+                  onChange={set('price')}
+                  disabled={form.listingType === 'Giveaway'}
+                  placeholder="0"
+                />
+              </Field>
+            </div>
+            <Field label="Condition">
+              <select className="input" value={form.condition} onChange={set('condition')}>
+                {CONDITIONS.map((c) => (
+                  <option key={c} value={c} style={{ background: 'var(--surface)' }}>{c}</option>
                 ))}
               </select>
             </Field>
-            <Field label="Price (₹)" style={{ flex: 1, minWidth: 160 }}>
-              <input
-                className="input"
-                type="number"
-                min="0"
-                value={form.listingType === 'Giveaway' ? 0 : form.price}
-                onChange={set('price')}
-                disabled={form.listingType === 'Giveaway'}
-                placeholder="0"
-              />
-            </Field>
-          </div>
+          </>
         )}
 
         <Field label="Description">
@@ -135,6 +213,50 @@ export default function PostModal({ isOpen, onClose, onSubmit }) {
             style={{ resize: 'vertical' }}
           />
         </Field>
+
+        {/* Image upload */}
+        <div style={{ marginBottom: 14 }}>
+          <span style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--ink-secondary)', marginBottom: 6 }}>
+            Photo (optional)
+          </span>
+          {imagePreview ? (
+            <div style={{ position: 'relative', display: 'inline-block' }}>
+              <img src={imagePreview} alt="Preview" style={{ maxHeight: 120, borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }} />
+              <button
+                type="button"
+                onClick={() => { setImagePreview(null); setImageFile(null); }}
+                className="btn btn-ghost btn-sm btn-icon"
+                style={{ position: 'absolute', top: 4, right: 4, background: 'var(--surface)', borderRadius: '50%', width: 28, height: 28, padding: 0 }}
+                aria-label="Remove image"
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              className="btn btn-ghost"
+              style={{ width: '100%', padding: '20px 0', border: '2px dashed var(--border)', borderRadius: 'var(--radius-md)' }}
+            >
+              <ImagePlus size={18} color="var(--ink-muted)" /> <span style={{ color: 'var(--ink-muted)', fontSize: 'var(--text-sm)' }}>Add a photo</span>
+            </button>
+          )}
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              setImageFile(file);
+              const reader = new FileReader();
+              reader.onload = (ev) => setImagePreview(ev.target.result);
+              reader.readAsDataURL(file);
+            }}
+          />
+        </div>
 
         <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} disabled={!valid}>
           <PlusCircle size={16} /> Post report

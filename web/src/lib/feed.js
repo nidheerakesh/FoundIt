@@ -8,8 +8,18 @@
 import {
   collection, addDoc, onSnapshot, query, orderBy, serverTimestamp,
 } from 'firebase/firestore';
-import { db } from './firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage } from './firebase';
 import { COL } from '../types';
+
+async function uploadImage(file, folder) {
+  if (!file) return [];
+  const path = `${folder}/${Date.now()}_${file.name}`;
+  const storageRef = ref(storage, path);
+  await uploadBytes(storageRef, file);
+  const url = await getDownloadURL(storageRef);
+  return [url];
+}
 
 const PRICE_TO_LISTING = { sale: 'Sell', free: 'Giveaway', rent: 'Rent' };
 const LISTING_TO_PRICE = { Sell: 'sale', Giveaway: 'free', Rent: 'rent' };
@@ -44,6 +54,7 @@ function lostFoundToCard(id, d) {
     trustScore: d.trustScore ?? 50,
     matchScore: d.matchScore ?? null,
     tags: d.keywords || [],
+    imageURL: d.imageURLs?.[0] || null,
     _sort: createdMs(d),
   };
 }
@@ -66,6 +77,7 @@ function listingToCard(id, d) {
     listingType: PRICE_TO_LISTING[d.priceType] || 'Sell',
     condition: d.condition || '',
     tags: d.keywords || [],
+    imageURL: d.imageURLs?.[0] || null,
     _sort: createdMs(d),
   };
 }
@@ -99,6 +111,7 @@ function deriveKeywords(...parts) {
 
 /** Write a lost/found report. `poster` carries the denormalized display fields. */
 export async function addLostFound(form, poster) {
+  const imageURLs = await uploadImage(form.imageFile, 'items');
   return addDoc(collection(db, COL.lostFoundItems), {
     type: form.type, // 'lost' | 'found'
     title: form.title,
@@ -107,7 +120,7 @@ export async function addLostFound(form, poster) {
     keywords: deriveKeywords(form.title, form.description),
     zoneId: form.location,
     location: form.location,
-    imageURLs: [],
+    imageURLs,
     status: 'open',
     postedBy: poster.uid,
     reporterName: poster.name,
@@ -122,6 +135,7 @@ export async function addLostFound(form, poster) {
 
 /** Write a marketplace listing. */
 export async function addListing(form, poster) {
+  const imageURLs = await uploadImage(form.imageFile, 'listings');
   return addDoc(collection(db, COL.listings), {
     title: form.title,
     description: form.description,
@@ -131,7 +145,7 @@ export async function addListing(form, poster) {
     priceType: LISTING_TO_PRICE[form.listingType] || 'sale',
     price: form.listingType === 'Giveaway' ? 0 : Number(form.price) || 0,
     location: form.location,
-    imageURLs: [],
+    imageURLs,
     status: 'active',
     sellerUid: poster.uid,
     sellerName: poster.name,

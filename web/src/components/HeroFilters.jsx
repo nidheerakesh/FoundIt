@@ -1,12 +1,20 @@
 import { MapPin, Tag, ShieldCheck } from 'lucide-react';
 import { CAMPUS_LOCATIONS, CATEGORIES } from '../data/mockData';
 
+const TABS_MOBILE = [
+  { key: 'all', label: 'All' },
+  { key: 'lost_found', label: 'Lost & Found' },
+  { key: 'marketplace', label: 'Market' },
+];
+
 export default function HeroFilters({
   selectedLocation,
   setSelectedLocation,
   selectedCategory,
   setSelectedCategory,
   stats,
+  activeTab,
+  setActiveTab,
 }) {
   return (
     <section style={{ maxWidth: 1200, margin: '20px auto 8px', padding: '0 16px', width: '100%' }}>
@@ -32,6 +40,25 @@ export default function HeroFilters({
           <b style={{ color: 'var(--warn)' }}>{stats.matches}</b> smart matches
         </p>
       </div>
+
+      {/* Mobile tab switcher (hidden on desktop via CSS) */}
+      {setActiveTab && (
+        <div className="mobile-tabs" style={{ display: 'none', gap: 2, background: 'var(--surface)', padding: 3, borderRadius: 'var(--radius-full)', border: '1px solid var(--border)', marginTop: 14 }}>
+          {TABS_MOBILE.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setActiveTab(t.key)}
+              style={{
+                flex: 1, border: 'none', cursor: 'pointer', padding: '7px 0',
+                borderRadius: 'var(--radius-full)', fontSize: 'var(--text-sm)',
+                fontWeight: 600, fontFamily: 'inherit',
+                color: activeTab === t.key ? 'var(--accent-ink)' : 'var(--ink-secondary)',
+                background: activeTab === t.key ? 'var(--accent)' : 'transparent',
+              }}
+            >{t.label}</button>
+          ))}
+        </div>
+      )}
 
       {/* Filter bar */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 18 }}>
