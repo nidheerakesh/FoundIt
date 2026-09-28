@@ -24,6 +24,18 @@ export default function ItemCard({ item, index = 0, onClaim, onChat, onHandshake
       className="surface card stagger"
       style={{ display: 'flex', flexDirection: 'column', padding: 16, animationDelay: `${Math.min(index, 8) * 45}ms` }}
     >
+      {/* Image */}
+      {item.imageURL && (
+        <div style={{ margin: '-16px -16px 12px', overflow: 'hidden', borderRadius: 'var(--radius-lg) var(--radius-lg) 0 0' }}>
+          <img
+            src={item.imageURL}
+            alt={item.title}
+            loading="lazy"
+            style={{ width: '100%', height: 160, objectFit: 'cover', display: 'block' }}
+          />
+        </div>
+      )}
+
       {/* Header row */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>

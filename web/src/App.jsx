@@ -12,6 +12,7 @@ import DealModal from './components/DealModal';
 import FlagModal from './components/FlagModal';
 import AIAssistantModal from './components/AIAssistantModal';
 import ProfileModal from './components/ProfileModal';
+import HowItWorks from './components/HowItWorks';
 import { INITIAL_ITEMS } from './data/mockData';
 import { useFeed } from './hooks/useFeed';
 import { addLostFound, addListing } from './lib/feed';
@@ -313,6 +314,8 @@ export default function App() {
           else handleOpenClaim(item);
         }}
       />
+
+      <HowItWorks />
 
       <footer
         style={{ maxWidth: 1200, margin: '24px auto', padding: '0 16px', width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16, borderTop: '1px solid var(--border)', paddingTop: 20 }}
