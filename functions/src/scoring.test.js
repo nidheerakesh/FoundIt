@@ -26,6 +26,26 @@ test('matchScore: same type never complements, different category/zone lowers sc
   assert.strictEqual(matchScore(a, b), 10);
 });
 
+test('matchScore: an adjacent zone scores half of an exact zone', () => {
+  const now = Date.now();
+  // SCORING.md §2.1 — zoneProximity: same zone 1.0, adjacent 0.5, else 0.
+  // The adjacency map comes from campusZones (see scripts/seed-zones.mjs).
+  const adjacency = { library: ['study-block'], 'study-block': ['library'] };
+  const lost = { type: 'lost', category: 'Books', keywords: ['notes'], zoneId: 'library', createdAt: now };
+  const base = { type: 'found', category: 'Books', keywords: ['notes'], createdAt: now };
+
+  const same = matchScore(lost, { ...base, zoneId: 'library' }, adjacency);
+  const adjacent = matchScore(lost, { ...base, zoneId: 'study-block' }, adjacency);
+  const unrelated = matchScore(lost, { ...base, zoneId: 'sports-ground' }, adjacency);
+
+  assert.strictEqual(same, 100);      // .30 + .30 + .20 + .10 + .10
+  assert.strictEqual(adjacent, 90);   // zone term halved: .20 → .10
+  assert.strictEqual(unrelated, 80);  // zone term drops out entirely
+
+  // Without the map, an adjacent zone is indistinguishable from an unrelated one.
+  assert.strictEqual(matchScore(lost, { ...base, zoneId: 'study-block' }), unrelated);
+});
+
 test('trustScore: new verified user sits near neutral', () => {
   const r = trustScore({ verified: true, ratingCount: 0, resolvedCount: 0, accountAgeDays: 0 });
   // 50 baseline + 10 verification, rating damped to prior (~+10) → ~70

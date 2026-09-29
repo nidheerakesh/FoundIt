@@ -1,4 +1,4 @@
-import { MapPin, Clock, Sparkles, MessageCircle, Handshake, Flag, Package } from 'lucide-react';
+import { MapPin, Clock, Sparkles, MessageCircle, Handshake, Flag, Package, ShieldCheck } from 'lucide-react';
 import TrustBadge from './TrustBadge';
 
 const TYPE_BADGE = {
@@ -9,9 +9,11 @@ const TYPE_BADGE = {
 
 const LISTING_LABEL = { Sell: 'Sell', Rent: 'For Rent', Giveaway: 'Free' };
 
-export default function ItemCard({ item, index = 0, onClaim, onChat, onHandshake, onFlag, onSmartMatch }) {
+export default function ItemCard({ item, index = 0, currentUid = null, onClaim, onChat, onHandshake, onFlag, onSmartMatch, onReviewClaims }) {
   const badge = TYPE_BADGE[item.type] ?? TYPE_BADGE.marketplace;
   const isMarket = item.type === 'marketplace';
+  // Mock/demo cards carry no postedBy, so this is false for them — they stay claimable.
+  const isOwn = !!currentUid && item.postedBy === currentUid;
 
   const priceLabel = isMarket
     ? item.listingType === 'Giveaway' || item.price === 0
@@ -109,6 +111,11 @@ export default function ItemCard({ item, index = 0, onClaim, onChat, onHandshake
         {isMarket ? (
           <button className="btn btn-success btn-sm" style={{ flex: 1 }} onClick={() => onHandshake?.(item)}>
             <Handshake size={15} /> Make a deal
+          </button>
+        ) : isOwn ? (
+          // You cannot claim your own report — this is the resolving side of it.
+          <button className="btn btn-primary btn-sm" style={{ flex: 1 }} onClick={() => onReviewClaims?.(item)}>
+            <ShieldCheck size={15} /> Review claims
           </button>
         ) : (
           <button className="btn btn-primary btn-sm" style={{ flex: 1 }} onClick={() => onClaim?.(item)}>

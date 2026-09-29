@@ -606,7 +606,7 @@ async function build() {
     T(s, "HTTPS  /  WebSocket", { x: W / 2 + 0.18, y: 3.24, w: 3, h: 0.22, fontSize: 8.5, bold: true, color: C.mute, charSpacing: 1.2 });
     await layer(3.46, 2.18, "E5F3EC", "FiServer", C.mint, C.mintD, "FIREBASE PLATFORM — managed backend", [
       ["Managed services", "Authentication · Cloud Firestore · Cloud Storage"],
-      ["Cloud Functions v2", "suggestMatches · onClaimResolved · onReviewCreated · onFlagCreated · confirmTransaction · resolveFlag · recomputeTrustScore · setUserRole"],
+      ["Cloud Functions v2", "suggestMatches · onClaimCreated · onClaimResolved · onReviewCreated · onFlagCreated · confirmTransaction · resolveFlag · recomputeTrustScore · setUserRole"],
       ["Gateway", "Security Rules — firestore.rules · storage.rules screen every read and write"],
     ]);
     arrowD(s, W / 2 - 0.09, 5.70, 0.22);
@@ -753,9 +753,11 @@ async function build() {
   // ─────────────────────────────────────────────── 21 · CLOUD FUNCTIONS
   {
     const s = slide();
-    head(s, "03 · ARCHITECTURE", "Cloud Functions — the API surface");
+    head(s, "03 · ARCHITECTURE", "Cloud Functions — the API surface",
+      "Cloud Functions v2 on Node 22 · triggers react to document lifecycle events, onCall functions are invoked from the client over HTTPS");
     const fns = [
-      ["suggestMatches", "onDocumentWritten", C.mint, C.mintD, "Scores every lost / found pair and writes matchedWith, matchScore and notifications."],
+      ["suggestMatches", "onDocumentWritten", C.mint, C.mintD, "Scores every lost / found pair, writes the match onto both reports and notifies both posters."],
+      ["onClaimCreated", "onDocumentCreated", C.mint, C.mintD, "Tells the item's poster a claim is waiting, so they can approve or reject it."],
       ["onClaimResolved", "onDocumentWritten", C.mint, C.mintD, "Updates item status and user stats, recomputes trust, notifies the claimant."],
       ["onReviewCreated", "onDocumentCreated", C.mint, C.mintD, "Aggregates the rating average and recomputes the ratee's trust score."],
       ["onFlagCreated", "onDocumentCreated", C.mint, C.mintD, "Increments flagCount and auto-hides the target once the threshold is hit."],
@@ -764,19 +766,16 @@ async function build() {
       ["recomputeTrustScore", "onCall · HTTPS", C.sky, C.skyD, "Recalculates trust from ratings, activity, verification, tenure and strikes."],
       ["setUserRole", "onCall · HTTPS", C.sky, C.skyD, "Admin only — sets the Firebase custom claim and the user document role."],
     ];
-    const cw = (CW - 3 * 0.28) / 4, chh = 2.12;
-    for (let i = 0; i < 8; i++) {
+    const cw = (CW - 2 * 0.28) / 3, chh = 1.56;
+    for (let i = 0; i < 9; i++) {
       const [name, trig, bg, fg, desc] = fns[i];
-      const x = ML + (i % 4) * (cw + 0.28), y = 1.70 + Math.floor(i / 4) * (chh + 0.22);
+      const x = ML + (i % 3) * (cw + 0.28), y = 1.86 + Math.floor(i / 3) * (chh + 0.18);
       card(s, { x, y, w: cw, h: chh });
-      pill(s, x + 0.26, y + 0.26, trig, bg, fg, 8.5, trig.length * 0.072 + 0.30);
-      T(s, name, { x: x + 0.26, y: y + 0.74, w: cw - 0.52, h: 0.34, fontSize: 12, bold: true, color: C.ink });
-      T(s, desc, { x: x + 0.26, y: y + 1.14, w: cw - 0.52, h: 0.80, fontSize: 9.6, color: C.mute, lineSpacingMultiple: 1.18 });
+      pill(s, x + 0.26, y + 0.22, trig, bg, fg, 8.5, trig.length * 0.072 + 0.30);
+      T(s, name, { x: x + 0.26, y: y + 0.62, w: cw - 0.52, h: 0.32, fontSize: 12, bold: true, color: C.ink });
+      T(s, desc, { x: x + 0.26, y: y + 0.96, w: cw - 0.52, h: 0.50, fontSize: 9.6, color: C.mute, lineSpacingMultiple: 1.18 });
     }
-    card(s, { x: ML, y: 6.38, w: CW, h: 0.60, fill: C.tint, line: "DFD2F2" });
-    T(s, "Cloud Functions v2 on Node 22. Trigger functions react to document lifecycle events; onCall functions are invoked directly from the client over HTTPS.",
-      { x: ML + 0.40, y: 6.53, w: CW - 0.80, h: 0.32, fontSize: 10.5, color: C.ink2 });
-    s.addNotes("Eight functions, split between document triggers and callable RPCs. Everything security-critical lives here rather than in the client.");
+    s.addNotes("Nine functions, split between document triggers and callable RPCs. Everything security-critical lives here rather than in the client. onClaimCreated is what makes the claim visible to the finder — without it FR-10 could not complete.");
   }
 
   // ─────────────────────────────────────────────── 22 · SCORING

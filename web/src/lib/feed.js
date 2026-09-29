@@ -43,6 +43,11 @@ function lostFoundToCard(id, d) {
     verified: !!d.verified,
     trustScore: d.trustScore ?? 50,
     matchScore: d.matchScore ?? null,
+    matchedWith: d.matchedWith || [],
+    // Needed so the UI can tell the poster apart from everyone else: the poster
+    // reviews claims (FR-10), everyone else submits them.
+    postedBy: d.postedBy || null,
+    status: d.status || 'open',
     tags: d.keywords || [],
     imageURL: d.imageURLs?.[0] || null,
     _sort: createdMs(d),

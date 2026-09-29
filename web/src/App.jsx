@@ -7,6 +7,7 @@ import PostModal from './components/PostModal';
 import Toast from './components/Toast';
 import SmartMatchModal from './components/SmartMatchModal';
 import ClaimModal from './components/ClaimModal';
+import ClaimsReviewModal from './components/ClaimsReviewModal';
 import ChatModal from './components/ChatModal';
 import DealModal from './components/DealModal';
 import FlagModal from './components/FlagModal';
@@ -58,6 +59,7 @@ export default function App() {
   const [isDealOpen, setIsDealOpen] = useState(false);
   const [isFlagOpen, setIsFlagOpen] = useState(false);
   const [isSmartMatchOpen, setIsSmartMatchOpen] = useState(false);
+  const [isClaimsReviewOpen, setIsClaimsReviewOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isModerationOpen, setIsModerationOpen] = useState(false);
   const [toast, setToast] = useState('');
@@ -95,6 +97,11 @@ export default function App() {
     setIsClaimOpen(true);
   };
 
+  const handleOpenClaimsReview = (target) => {
+    setActiveItem(target);
+    setIsClaimsReviewOpen(true);
+  };
+
   const handleOpenChat = (target) => {
     if (!isAuthed) { showToast('Sign in with your campus account to message students.'); setIsAuthOpen(true); return; }
     setActiveItem(target);
@@ -115,8 +122,21 @@ export default function App() {
 
   const handleOpenSmartMatch = (target) => {
     const candidateMatches = findMatchesForItem(target, items);
+    // suggestMatches is authoritative (SCORING.md §2); the client scorer is the
+    // offline fallback. Show the server's pick and its score when it wrote one,
+    // so the percentage here agrees with the one in the match notification.
+    const serverPick = target.matchedWith?.[0]
+      ? items.find((i) => i.id === target.matchedWith[0])
+      : null;
+    const best = serverPick
+      ? {
+          ...(candidateMatches.find((m) => m.candidate.id === serverPick.id) || { factors: [] }),
+          candidate: serverPick,
+          score: target.matchScore ?? 0,
+        }
+      : candidateMatches[0] || null;
     setActiveItem(target);
-    setActiveMatchResult(candidateMatches[0] || null);
+    setActiveMatchResult(best);
     setIsSmartMatchOpen(true);
   };
 
@@ -283,7 +303,9 @@ export default function App() {
                 key={item.id}
                 item={item}
                 index={i}
+                currentUid={user?.uid || null}
                 onClaim={handleOpenClaim}
+                onReviewClaims={handleOpenClaimsReview}
                 onChat={handleOpenChat}
                 onHandshake={handleOpenHandshake}
                 onFlag={handleOpenFlag}
@@ -330,6 +352,14 @@ export default function App() {
         item={activeItem}
         currentUser={poster || user}
         onFlagSuccess={(msg) => showToast(msg)}
+      />
+
+      <ClaimsReviewModal
+        isOpen={isClaimsReviewOpen}
+        onClose={() => setIsClaimsReviewOpen(false)}
+        item={activeItem}
+        onToast={(msg) => showToast(msg)}
+        onOpenChat={(it) => handleOpenChat(it)}
       />
 
       <SmartMatchModal

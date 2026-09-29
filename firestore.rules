@@ -52,8 +52,15 @@ service cloud.firestore {
       match /claims/{claimId} {
         allow read: if true;
         allow create: if isVerified() && request.resource.data.claimantUid == request.auth.uid;
-        allow update: if isMod()
-          || (signedIn() && get(/databases/$(database)/documents/lostFoundItems/$(itemId)).data.postedBy == request.auth.uid);
+        // Approve/reject only (FR-10). The resolver moves the status and nothing
+        // else — it cannot rewrite the claimant's proof or reassign the claim —
+        // and only out of 'pending', so the state machine stays one-way
+        // (ARCHITECTURE.md §4.6). onClaimResolved owns everything downstream.
+        allow update: if (isMod()
+            || (signedIn() && get(/databases/$(database)/documents/lostFoundItems/$(itemId)).data.postedBy == request.auth.uid))
+          && resource.data.status == 'pending'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+          && request.resource.data.status in ['approved', 'rejected'];
         allow delete: if false;
       }
     }

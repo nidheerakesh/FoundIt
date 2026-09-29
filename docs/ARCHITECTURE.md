@@ -216,7 +216,7 @@ The `notify()` helper in Cloud Functions writes to the `notifications` collectio
 
 | Event | Notifies |
 |-------|----------|
-| New match found | Both item posters |
+| New match found | Both item posters (the trigger fires for one side, `mirrorMatches` fans out to the other) |
 | Claim submitted | Item owner |
 | Claim resolved | Claimant |
 | Deal confirmed | Buyer + seller |
@@ -265,9 +265,11 @@ Components don't interact with Firebase directly — they consume a clean, merge
 │  (email/pass)  │ (real-time DB)  │ (images)     │
 ├────────────────────────────────────────────────┤
 │           Cloud Functions v2 (Node 22)          │
-│  suggestMatches │ onClaimResolved │ onReview    │
-│  confirmTxn     │ onFlag          │ resolveFlag │
-│  recomputeTrust │ setUserRole                   │
+│  suggestMatches │ onClaimCreated               │
+│  onClaimResolved │ onReviewCreated             │
+│  onFlagCreated │ resolveFlag                   │
+│  confirmTransaction │ recomputeTrustScore      │
+│  setUserRole                                   │
 ├────────────────────────────────────────────────┤
 │           Security Rules (Gateway)              │
 │  firestore.rules │ storage.rules                │
@@ -435,7 +437,8 @@ The `keeps(field)` helper ensures fields like `trustScore`, `matchScore`, `statu
 
 | Function | Trigger Type | Input | Output |
 |----------|-------------|-------|--------|
-| `suggestMatches` | onDocumentWritten (lostFoundItems) | Document change | Writes matchedWith, matchScore, notifications |
+| `suggestMatches` | onDocumentWritten (lostFoundItems) | Document change | Writes matchedWith, matchScore and notifications onto **both** sides of the pair |
+| `onClaimCreated` | onDocumentCreated (claims) | New claim doc | Notifies the item's poster that a claim is waiting |
 | `onClaimResolved` | onDocumentWritten (claims) | Claim status change | Updates item status, user stats, trust, notifications |
 | `onReviewCreated` | onDocumentCreated (reviews) | New review doc | Aggregates ratings, recomputes trust |
 | `confirmTransaction` | onCall (HTTPS) | { listingId } | Two-party handshake, status update |
