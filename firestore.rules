@@ -21,9 +21,14 @@ service cloud.firestore {
     match /categories/{id} { allow read: if true; allow write: if false; }
     match /campusZones/{id} { allow read: if true; allow write: if false; }
 
-    // User profiles — public read; you edit only your own, and only profile fields.
+    // User profiles — signed-in read; you edit only your own, and only profile fields.
     match /users/{uid} {
-      allow read: if true;
+      // Profile docs hold the student's campus email, so they are not public:
+      // `if true` here let anyone on the internet enumerate every registered
+      // user's email over the REST API. The display name and trust score shown
+      // in the feed are denormalized onto the item docs, which stay publicly
+      // readable, so nothing in the signed-out UI depends on this.
+      allow read: if signedIn();
       allow create: if signedIn() && request.auth.uid == uid;
       allow update: if signedIn() && request.auth.uid == uid
         && keeps('trustScore') && keeps('trustTier') && keeps('trustBreakdown')
