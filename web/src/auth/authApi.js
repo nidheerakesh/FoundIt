@@ -8,6 +8,8 @@ import {
   sendPasswordResetEmail,
   updateProfile,
   applyActionCode,
+  GoogleAuthProvider,
+  signInWithPopup,
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
@@ -76,6 +78,31 @@ export async function register({ name, email, password, dept }) {
 
 export async function login({ email, password }) {
   const { user } = await signInWithEmailAndPassword(auth, email.trim(), password);
+  await ensureUserProfile(user);
+  return user;
+}
+
+/**
+ * Google sign-in, restricted to the campus Workspace domain.
+ * Google accounts arrive with emailVerified already true, so these users skip
+ * the email verification step entirely.
+ */
+export async function signInWithGoogle() {
+  const provider = new GoogleAuthProvider();
+  // `hd` only pre-filters Google's account chooser — it is a UI hint the client
+  // controls, not a guarantee, so the domain is re-checked below before we keep
+  // the session.
+  if (CAMPUS_DOMAIN) provider.setCustomParameters({ hd: CAMPUS_DOMAIN });
+
+  const { user } = await signInWithPopup(auth, provider);
+
+  if (!isCampusEmail(user.email || '')) {
+    await signOut(auth);
+    const err = new Error(`That Google account isn't a campus account. ${campusDomainHint()}`.trim());
+    err.code = 'auth/not-campus-email';
+    throw err;
+  }
+
   await ensureUserProfile(user);
   return user;
 }
