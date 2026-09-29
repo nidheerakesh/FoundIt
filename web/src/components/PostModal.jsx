@@ -28,6 +28,7 @@ export default function PostModal({ isOpen, onClose, onSubmit }) {
   const [aiNote, setAiNote] = useState('');
   const [imagePreview, setImagePreview] = useState(null);
   const [imageFile, setImageFile] = useState(null);
+  const [posting, setPosting] = useState(false);
   const fileRef = useRef(null);
   if (!isOpen) return null;
 
@@ -66,24 +67,30 @@ export default function PostModal({ isOpen, onClose, onSubmit }) {
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!valid) return;
-    // Emit the raw form; App writes it to the right Firestore collection.
-    await onSubmit({
-      type: form.type,
-      title: form.title.trim(),
-      category: form.category,
-      location: form.location,
-      description: form.description.trim(),
-      price: form.price,
-      listingType: form.listingType,
-      condition: isMarket ? form.condition : '',
-      imageFile: imageFile || null,
-    });
-    setForm(EMPTY);
-    setAiNote('');
-    setImagePreview(null);
-    setImageFile(null);
-    onClose();
+    if (!valid || posting) return;
+    setPosting(true);
+    try {
+      // Emit the raw form; App writes it to the right Firestore collection.
+      await onSubmit({
+        type: form.type,
+        title: form.title.trim(),
+        category: form.category,
+        location: form.location,
+        description: form.description.trim(),
+        price: form.price,
+        listingType: form.listingType,
+        condition: isMarket ? form.condition : '',
+        imageFile: imageFile || null,
+      });
+      setForm(EMPTY);
+      setAiNote('');
+      setImagePreview(null);
+      setImageFile(null);
+      onClose();
+    } finally {
+      // Always clear: a failed post must not leave the button stuck disabled.
+      setPosting(false);
+    }
   };
 
   return (
@@ -272,8 +279,8 @@ export default function PostModal({ isOpen, onClose, onSubmit }) {
           />
         </div>
 
-        <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} disabled={!valid}>
-          <PlusCircle size={16} /> Post report
+        <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} disabled={!valid || posting}>
+          <PlusCircle size={16} /> {posting ? 'Posting…' : 'Post report'}
         </button>
       </form>
     </div>

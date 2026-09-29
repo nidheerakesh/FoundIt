@@ -12,13 +12,32 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from './firebase';
 import { COL } from '../types';
 
+// An image is a nice-to-have; the report is the point. When Storage is not
+// enabled or is unreachable the SDK retries instead of failing fast, which left
+// the post modal hanging with no feedback and the report never written. Time-box
+// the upload and post without the photo rather than losing the whole report.
+const IMAGE_UPLOAD_TIMEOUT_MS = 12000;
+
 async function uploadImage(file, folder) {
   if (!file) return [];
   const path = `${folder}/${Date.now()}_${file.name}`;
   const storageRef = ref(storage, path);
-  await uploadBytes(storageRef, file);
-  const url = await getDownloadURL(storageRef);
-  return [url];
+
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error('image upload timed out')), IMAGE_UPLOAD_TIMEOUT_MS);
+  });
+
+  try {
+    await Promise.race([uploadBytes(storageRef, file), timeout]);
+    return [await getDownloadURL(storageRef)];
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[FoundIt] Image upload failed, posting without it:', err.message);
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 const PRICE_TO_LISTING = { sale: 'Sell', free: 'Giveaway', rent: 'Rent' };
