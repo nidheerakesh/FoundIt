@@ -30,14 +30,42 @@ export function campusDomainHint() {
   return CAMPUS_DOMAIN ? `Use your @${CAMPUS_DOMAIN} email.` : '';
 }
 
-/** Create (or return) the users/{uid} profile doc with sane defaults. */
+// Firestore queues writes while offline and only settles the promise once the
+// server acknowledges them — so an unreachable backend makes `await setDoc(...)`
+// hang forever rather than reject. Sign-in must never depend on that: the write
+// still lands when the connection returns, we just stop waiting for it.
+const PROFILE_WRITE_TIMEOUT_MS = 4000;
+
+function withTimeout(promise, ms, label) {
+  let timer;
+  return Promise.race([
+    promise.finally(() => clearTimeout(timer)),
+    new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        const err = new Error(`${label} timed out after ${ms}ms — Firestore unreachable?`);
+        err.code = 'foundit/firestore-timeout';
+        reject(err);
+      }, ms);
+    }),
+  ]);
+}
+
+/**
+ * Create (or return) the users/{uid} profile doc with sane defaults.
+ * Throws `foundit/firestore-timeout` if the backend is unreachable; callers on
+ * the sign-in path treat that as non-fatal.
+ */
 export async function ensureUserProfile(user, extra = {}) {
   const ref = doc(db, COL.users, user.uid);
-  const snap = await getDoc(ref);
+  const snap = await withTimeout(getDoc(ref), PROFILE_WRITE_TIMEOUT_MS, 'profile read');
   if (snap.exists()) {
     // keep verified in sync with the auth record
     if (snap.data().verified !== user.emailVerified) {
-      await setDoc(ref, { verified: user.emailVerified }, { merge: true });
+      await withTimeout(
+        setDoc(ref, { verified: user.emailVerified }, { merge: true }),
+        PROFILE_WRITE_TIMEOUT_MS,
+        'profile sync'
+      );
     }
     return { uid: user.uid, ...snap.data(), verified: user.emailVerified };
   }
@@ -56,8 +84,23 @@ export async function ensureUserProfile(user, extra = {}) {
     trustTier: 'neutral',
     createdAt: serverTimestamp(),
   };
-  await setDoc(ref, profile);
+  await withTimeout(setDoc(ref, profile), PROFILE_WRITE_TIMEOUT_MS, 'profile create');
   return { uid: user.uid, ...profile };
+}
+
+/**
+ * Profile sync that never fails a sign-in. Authentication has already succeeded
+ * by the time we get here, so an unreachable Firestore should degrade to "signed
+ * in without a profile doc yet", not "sign-in failed".
+ */
+async function ensureProfileBestEffort(user, extra = {}) {
+  try {
+    return await ensureUserProfile(user, extra);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[FoundIt] Profile sync skipped:', err.message);
+    return null;
+  }
 }
 
 export async function register({ name, email, password, dept }) {
@@ -68,7 +111,7 @@ export async function register({ name, email, password, dept }) {
   }
   const { user } = await createUserWithEmailAndPassword(auth, email.trim(), password);
   if (name) await updateProfile(user, { displayName: name });
-  await ensureUserProfile(user, { name, dept });
+  await ensureProfileBestEffort(user, { name, dept });
   try {
     await sendEmailVerification(user);
   } catch (verifyErr) {
@@ -80,7 +123,7 @@ export async function register({ name, email, password, dept }) {
 
 export async function login({ email, password }) {
   const { user } = await signInWithEmailAndPassword(auth, email.trim(), password);
-  await ensureUserProfile(user);
+  await ensureProfileBestEffort(user);
   return user;
 }
 
@@ -122,7 +165,7 @@ export async function signInWithGoogle() {
   try {
     const { user } = await signInWithPopup(auth, googleProvider());
     await enforceCampusAccount(user);
-    await ensureUserProfile(user);
+    await ensureProfileBestEffort(user);
     return user;
   } catch (err) {
     if (!POPUP_UNAVAILABLE.has(err.code)) throw err;
@@ -139,7 +182,7 @@ export async function completeGoogleRedirect() {
   const result = await getRedirectResult(auth);
   if (!result) return null;
   await enforceCampusAccount(result.user);
-  await ensureUserProfile(result.user);
+  await ensureProfileBestEffort(result.user);
   return result.user;
 }
 

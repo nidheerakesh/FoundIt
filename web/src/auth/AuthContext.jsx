@@ -32,12 +32,15 @@ export function AuthProvider({ children }) {
         setLoading(false);
         return;
       }
-      // Make sure the profile doc exists, then subscribe to it live.
-      await ensureUserProfile(u).catch(() => {});
+      // Subscribe first, then create the doc in the background. Awaiting the
+      // write here would gate the whole signed-in UI on a Firestore round-trip,
+      // and an unreachable backend would leave the app stuck on `loading`.
       unsubProfile = onSnapshot(doc(db, COL.users, u.uid), (snap) => {
         setProfile(snap.exists() ? { uid: u.uid, ...snap.data(), verified: u.emailVerified } : null);
         setLoading(false);
       }, () => setLoading(false));
+      setLoading(false);
+      ensureUserProfile(u).catch(() => {});
     });
     return () => { unsubAuth(); unsubProfile(); };
   }, []);
