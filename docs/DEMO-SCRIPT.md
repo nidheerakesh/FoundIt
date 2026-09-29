@@ -1,6 +1,13 @@
 # FoundIt — Live Demo Script
 
-**Team:** Nidhi (lead / projected screen), Shenza, Shanid, Hadi
+**Team & roles**
+
+| Person | Role in the story |
+|---|---|
+| **Nidhi** | Projected screen, narration. Loses the notebook, claims it back. |
+| **Shenza** | Second visible screen. Finds the notebook, posts it, approves the claim. |
+| **Shanid** | AI assistant search, flagging / moderation. |
+| **Hadi** | Marketplace buyer. |
 **Target length:** 9–11 minutes + questions
 **URL:** https://found-it-ashy-sigma.vercel.app
 
@@ -73,10 +80,19 @@ This one works with or without Blaze. Make it the centrepiece.
 
 1. **Shenza** signs in on device 2, feed visible to the room.
 2. **Nidhi** clicks **Post**, files a *lost* report:
-   - Title: `Lost black Casio FX-991 calculator`
-   - Category: Electronics · Location: Lecture Halls (LH)
-   - Description: mention a distinguishing mark
+   - Title: `Lost blue spiral lab record notebook`
+   - Category: **Books & Notes** · Location: Lecture Halls (LH)
+   - Description: `Blue spiral-bound lab record, name on the inside cover,
+     last used in the LH-101 electronics lab.`
 3. Submit. **Do not reload Shenza's device.**
+
+> **Why a notebook and not a calculator.** The seeded feed already contains a
+> lost *and* a found Casio calculator, plus paired water bottles and ID cards.
+> Posting another calculator would put four near-identical cards on screen and,
+> worse, Nidhi's new item would match the *seeded* found calculator as well as
+> Shenza's — so the match badge could point at the wrong card mid-demo.
+> Books & Notes has only marketplace listings seeded, no lost/found, so this
+> pair is guaranteed to match each other and nothing else.
 
 > "No refresh. Firestore pushes the change over an open snapshot listener —
 > every connected client is a subscriber. This is the Observer pattern, and it's
@@ -88,9 +104,15 @@ This one works with or without Blaze. Make it the centrepiece.
 
 ## 4. Smart matching (Shenza, 90s) **[BLAZE]**
 
-1. **Shenza** posts the complementary *found* report:
-   - Title: `Found Casio scientific calculator in LH-102`
-   - Same category and zone, overlapping keywords
+1. **Shenza** posts the complementary *found* report — she is the finder, Nidhi
+   is the loser; the function needs one `lost` and one `found` doc from
+   *different* posters (it skips same-poster candidates):
+   - Title: `Found blue spiral lab record book in LH-101`
+   - Category: **Books & Notes** · Location: Lecture Halls (LH)
+   - Description: `Picked up a blue spiral lab record after the electronics lab,
+     handed to the department office.`
+   - Keep the words *blue*, *spiral*, *lab*, *record* in both posts — keyword
+     overlap is the heaviest factor in the match score
 2. Within a few seconds both cards show a match badge; Nidhi's bell shows a
    notification.
 
@@ -108,18 +130,23 @@ it computed live. If a grader asks, offer to show the emulator run.
 
 ---
 
-## 5. Claim + verification (Shanid, 90s)
+## 5. Claim + verification (Nidhi claims, Shenza approves, 90s)
 
-1. **Shanid** signs in, finds Nidhi's lost calculator, clicks **Claim**.
-2. Fills the proof question and a meeting spot. Submits.
-3. **Nidhi** opens the claim on her device.
+Nidhi lost the notebook, so Nidhi is the one who claims it back. Shenza posted
+the found report, so Shenza is the finder who approves. Keep those roles
+straight — a grader watching the wrong person approve their own claim will ask.
+
+1. **Nidhi** opens the *found* lab record Shenza posted, clicks **Claim**.
+2. Answers the proof question — something only the real owner knows
+   (`name written inside the front cover`) — picks a meeting spot, submits.
+3. **Shenza** opens the claim on her device.
 
 > "The finder never sees a claimant's answer until they've submitted their own —
 > that's the anti-fraud step. Approval is a two-party handshake, not a button
 > one person presses."
 
-4. **[BLAZE]** Nidhi approves → item flips to *resolved*, both parties get
-   notified, finder's `resolvedCount` increments and trust recomputes.
+4. **[BLAZE]** Shenza approves → item flips to *resolved*, both parties get
+   notified, her `resolvedCount` increments and trust recomputes.
 
 **Without Blaze:** the claim submits and is visible, but approval won't resolve
 the item. Stop after step 3 and describe the rest.
@@ -141,7 +168,7 @@ hope. Describe the handshake over the listing screen instead.
 
 ---
 
-## 7. AI assistant (any device, 60s) — works regardless
+## 7. AI assistant (Shanid, 60s) — works regardless
 
 1. Open **AI Search**, type a natural-language query: `i lost my id card`
 2. Show that it returns the ID-card items, not random ones.
