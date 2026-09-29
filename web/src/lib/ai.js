@@ -182,15 +182,53 @@ Provide a helpful, friendly 2-3 sentence answer addressing their query, citing s
   }
 
   await new Promise((r) => setTimeout(r, 700));
-  const qLower = query.toLowerCase();
-  const qTokens = qLower.match(/[a-z0-9]{3,}/g) || [];
-  const matches = allItems.filter((item) => {
-    const hay = `${item.title} ${item.description} ${item.location} ${item.category} ${item.type}`.toLowerCase();
-    return qTokens.some((token) => hay.includes(token));
-  });
+
+  // Intent words describe what the student is doing, not the item they want.
+  // Leaving them in makes "i lost my id card" match every item whose type is "lost".
+  const INTENT_WORDS = new Set([
+    'lost', 'found', 'find', 'finding', 'looking', 'look', 'search', 'searching',
+    'anyone', 'someone', 'anybody', 'somebody', 'did', 'does', 'has', 'have', 'had',
+    'want', 'wanted', 'need', 'needed', 'show', 'get', 'got', 'give', 'turn', 'turned',
+    'report', 'reported', 'item', 'items', 'thing', 'things', 'stuff', 'please', 'help',
+    'the', 'and', 'for', 'any', 'can', 'you', 'are', 'was', 'were', 'his', 'her',
+    'there', 'where', 'what', 'who', 'how', 'this', 'that', 'with', 'from', 'about',
+    'near', 'around', 'been', 'campus', 'someones',
+    'my', 'me', 'mine', 'it', 'is', 'in', 'on', 'at', 'to', 'of', 'or', 'an', 'a', 'i',
+  ]);
+
+  const qTokens = [...new Set(
+    (query.toLowerCase().match(/[a-z0-9]{2,}/g) || []).filter((t) => !INTENT_WORDS.has(t))
+  )];
+
+  // Short tokens ("id", "tv") need a word-boundary match — a bare substring test
+  // would let "id" hit "video", "bridge", "identity". Longer tokens also try their
+  // singular form so "cycles" still finds "Cycle".
+  const matchers = qTokens.map((t) => ({
+    token: t.length > 4 && t.endsWith('s') ? t.slice(0, -1) : t,
+    re: t.length <= 3 ? new RegExp(`\\b${t}\\b`) : null,
+  }));
+  const hits = (haystack, m) => (m.re ? m.re.test(haystack) : haystack.includes(m.token));
+
+  // Rank by how many distinct query tokens hit, weighting title over other fields.
+  // `type` is deliberately excluded — it holds "lost"/"found", which are intent words.
+  const scored = allItems
+    .map((item) => {
+      const title = String(item.title || '').toLowerCase();
+      const rest = `${item.description || ''} ${item.location || ''} ${item.category || ''}`.toLowerCase();
+      let score = 0;
+      for (const m of matchers) {
+        if (hits(title, m)) score += 3;
+        else if (hits(rest, m)) score += 1;
+      }
+      return { item, score };
+    })
+    .filter((s) => s.score > 0)
+    .sort((a, b) => b.score - a.score);
+
+  const matches = scored.map((s) => s.item);
   const matchedIds = matches.slice(0, 3).map((m) => m.id);
   const answer = matches.length > 0
-    ? `Found ${matches.length} relevant report${matches.length > 1 ? 's' : ''}! For example: "${matches[0].title}" reported at ${matches[0].location} by ${matches[0].reporter}.`
+    ? `Found ${matches.length} relevant report${matches.length > 1 ? 's' : ''}! Closest: "${matches[0].title}" at ${matches[0].location}, reported by ${matches[0].reporter}.`
     : `I couldn't find any direct matches for "${query}". You can post a new report or check with the campus Security Desk.`;
 
   return { answer, matchedIds, tip: 'Remember to verify student credentials before meeting up in campus public zones.' };
