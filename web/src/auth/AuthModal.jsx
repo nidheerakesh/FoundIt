@@ -1,23 +1,19 @@
 import { useState } from 'react';
 import { X, ShieldCheck, Compass } from 'lucide-react';
-import { register, login, resetPassword, signInWithGoogle, campusDomainHint } from './authApi';
+import { signInWithGoogle, campusDomainHint } from './authApi';
 import { useAuth } from './AuthContext';
 
 const FRIENDLY = {
-  'auth/invalid-credential': 'Wrong email or password.',
-  'auth/invalid-email': 'That email address looks invalid.',
-  'auth/email-already-in-use': 'An account with this email already exists — try signing in.',
-  'auth/weak-password': 'Password must be at least 6 characters.',
-  'auth/missing-password': 'Enter a password.',
   'auth/not-campus-email': null, // message is already friendly
   'auth/popup-closed-by-user': 'Sign-in window closed before finishing.',
   'auth/cancelled-popup-request': 'Sign-in window closed before finishing.',
   'auth/popup-blocked':
     'Your browser blocked the Google sign-in window. Click the blocked-popup icon at the right of the address bar, allow popups for this site, then try again.',
   'auth/account-exists-with-different-credential':
-    'This email is already registered with a password. Sign in with your password instead.',
-  'auth/operation-not-allowed': 'This sign-in method is turned off for the project.',
+    'This email is already registered with a different sign-in method.',
+  'auth/operation-not-allowed': 'Google sign-in is turned off for this project.',
   'auth/unauthorized-domain': 'This domain is not authorised in Firebase Auth settings.',
+  'auth/network-request-failed': 'Network problem reaching Google. Check your connection and retry.',
 };
 
 function msgFor(err) {
@@ -25,41 +21,14 @@ function msgFor(err) {
 }
 
 export default function AuthModal({ isOpen, onClose }) {
-  const [mode, setMode] = useState('login'); // login | register
-  const [form, setForm] = useState({ name: '', email: '', password: '', dept: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
   const { redirectError, clearRedirectError } = useAuth();
 
   if (!isOpen) return null;
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
-  const isRegister = mode === 'register';
-
-  const submit = async (e) => {
-    e.preventDefault();
-    setError('');
-    setNotice('');
-    setBusy(true);
-    try {
-      if (isRegister) {
-        await register(form);
-        setNotice('Account created successfully! Check your email to verify.');
-        setTimeout(() => onClose(), 1500);
-      } else {
-        await login(form);
-        onClose();
-      }
-    } catch (err) {
-      setError(msgFor(err));
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const google = async () => {
     setError('');
-    setNotice('');
     clearRedirectError();
     setBusy(true);
     try {
@@ -72,51 +41,22 @@ export default function AuthModal({ isOpen, onClose }) {
     }
   };
 
-  const forgot = async () => {
-    if (!form.email) return setError('Enter your email first, then tap "Forgot password".');
-    setError('');
-    try {
-      await resetPassword(form.email);
-      setNotice('Password reset email sent.');
-    } catch (err) {
-      setError(msgFor(err));
-    }
-  };
-
   return (
     <div className="overlay" onClick={onClose} role="dialog" aria-modal="true" aria-label="Sign in">
-      <form className="surface modal" onClick={(e) => e.stopPropagation()} onSubmit={submit} style={{ width: 'min(420px, 100%)', padding: 24 }}>
+      <div className="surface modal" onClick={(e) => e.stopPropagation()} style={{ width: 'min(420px, 100%)', padding: 24 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{ width: 30, height: 30, borderRadius: 9, background: 'var(--accent)', color: 'var(--accent-ink)', display: 'grid', placeItems: 'center' }}>
               <Compass size={17} />
             </div>
-            <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 800 }}>{isRegister ? 'Join FoundIt' : 'Welcome back'}</h2>
+            <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 800 }}>Sign in to FoundIt</h2>
           </div>
           <button type="button" onClick={onClose} className="btn btn-ghost btn-sm btn-icon" aria-label="Close"><X size={16} /></button>
         </div>
-        <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--text-sm)', color: 'var(--ink-muted)', marginBottom: 18 }}>
+
+        <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--text-sm)', color: 'var(--ink-muted)', marginBottom: 20 }}>
           <ShieldCheck size={14} color="var(--accent)" /> Verified campus accounts only. {campusDomainHint()}
         </p>
-
-        {/* Tabs */}
-        <div style={{ display: 'flex', gap: 2, background: 'var(--surface-raised)', padding: 3, borderRadius: 'var(--radius-full)', border: '1px solid var(--border)', marginBottom: 18 }}>
-          {['login', 'register'].map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => { setMode(m); setError(''); setNotice(''); }}
-              style={{
-                flex: 1, border: 'none', cursor: 'pointer', padding: '7px 0', borderRadius: 'var(--radius-full)',
-                fontSize: 'var(--text-sm)', fontWeight: 600, fontFamily: 'inherit',
-                color: mode === m ? 'var(--accent-ink)' : 'var(--ink-secondary)',
-                background: mode === m ? 'var(--accent)' : 'transparent',
-              }}
-            >
-              {m === 'login' ? 'Sign in' : 'Register'}
-            </button>
-          ))}
-        </div>
 
         <button
           type="button"
@@ -124,60 +64,20 @@ export default function AuthModal({ isOpen, onClose }) {
           disabled={busy}
           className="btn"
           style={{
-            width: '100%', gap: 10, marginBottom: 16,
+            width: '100%', gap: 10,
             background: 'var(--surface)', color: 'var(--ink)',
             border: '1px solid var(--border)', fontWeight: 600,
           }}
         >
-          <GoogleIcon /> Continue with Google
+          <GoogleIcon /> {busy ? 'Opening Google…' : 'Continue with Google'}
         </button>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-          <span style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-muted)' }}>or use email</span>
-          <span style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-        </div>
+        {(error || redirectError) && <Banner>{error || redirectError}</Banner>}
 
-        {isRegister && (
-          <>
-            <Field label="Full name">
-              <input className="input" value={form.name} onChange={set('name')} placeholder="Nidhi Rakesh" autoComplete="name" />
-            </Field>
-            <Field label="Department / hostel">
-              <input className="input" value={form.dept} onChange={set('dept')} placeholder="CSE" />
-            </Field>
-          </>
-        )}
-        <Field label="Campus email">
-          <input className="input" type="email" value={form.email} onChange={set('email')} placeholder="you@campus.edu" autoComplete="email" required />
-        </Field>
-        <Field label="Password">
-          <input className="input" type="password" value={form.password} onChange={set('password')} placeholder="••••••••" autoComplete={isRegister ? 'new-password' : 'current-password'} required />
-        </Field>
-
-        {!isRegister && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <button type="button" onClick={forgot} style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: 'var(--text-xs)', fontWeight: 600, cursor: 'pointer' }}>
-              Forgot password?
-            </button>
-            <button
-              type="button"
-              onClick={() => setForm({ email: 'demo@campus.edu', password: 'password123', name: '', dept: '' })}
-              style={{ background: 'none', border: 'none', color: 'var(--ink-muted)', fontSize: 'var(--text-xs)', textDecoration: 'underline', cursor: 'pointer' }}
-              title="Fill demo credentials"
-            >
-              Prefill demo account
-            </button>
-          </div>
-        )}
-
-        {(error || redirectError) && <Banner tone="error">{error || redirectError}</Banner>}
-        {notice && <Banner tone="ok">{notice}</Banner>}
-
-        <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: 6 }} disabled={busy}>
-          {busy ? 'Please wait…' : isRegister ? 'Create account' : 'Sign in'}
-        </button>
-      </form>
+        <p style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-muted)', marginTop: 16, textAlign: 'center' }}>
+          Your campus Google account is used to verify you are a student. We never see your password.
+        </p>
+      </div>
     </div>
   );
 }
@@ -193,19 +93,10 @@ function GoogleIcon() {
   );
 }
 
-function Field({ label, children }) {
+function Banner({ children }) {
+  const c = 'var(--lost)';
   return (
-    <label style={{ display: 'block', marginBottom: 14 }}>
-      <span style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--ink-secondary)', marginBottom: 6 }}>{label}</span>
-      {children}
-    </label>
-  );
-}
-
-function Banner({ tone, children }) {
-  const c = tone === 'error' ? 'var(--lost)' : 'var(--found)';
-  return (
-    <div style={{ fontSize: 'var(--text-sm)', color: c, background: `${c}14`, border: `1px solid ${c}44`, borderRadius: 'var(--radius-md)', padding: '8px 12px', marginBottom: 12 }}>
+    <div style={{ fontSize: 'var(--text-sm)', color: c, background: `${c}14`, border: `1px solid ${c}44`, borderRadius: 'var(--radius-md)', padding: '8px 12px', marginTop: 14 }}>
       {children}
     </div>
   );

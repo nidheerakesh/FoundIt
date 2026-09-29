@@ -19,13 +19,20 @@ export function useFeed() {
         setError(new Error('Backend timeout'));
         setLoading(false);
       }
-    }, 2500);
+      // 2.5s was short enough that a cold backend or a slow network silently
+      // swapped the live feed for mock data. The UI looks correct either way,
+      // so the substitution is easy to miss — give the real backend room.
+    }, 8000);
 
     const unsub = subscribeFeed(
       (cards) => {
         resolved = true;
         clearTimeout(timer);
         setItems(cards);
+        // Clear a previous timeout: without this the mock-data fallback is
+        // permanent for the session, because App keys off `error` and a late
+        // snapshot would never win the feed back.
+        setError(null);
         setLoading(false);
       },
       (err) => {
