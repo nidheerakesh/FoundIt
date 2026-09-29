@@ -1,7 +1,7 @@
-import { useState, useRef } from 'react';
-import { X, PlusCircle, Sparkles, ImagePlus, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { X, PlusCircle, Sparkles } from 'lucide-react';
 import { CATEGORIES, CAMPUS_LOCATIONS } from '../data/mockData';
-import { generatePostAssistance, recognizeItemFromImage } from '../lib/ai';
+import { generatePostAssistance } from '../lib/ai';
 
 const TYPES = [
   { key: 'lost', label: 'Lost item', cls: 'badge-lost' },
@@ -26,10 +26,7 @@ export default function PostModal({ isOpen, onClose, onSubmit }) {
   const [form, setForm] = useState(EMPTY);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiNote, setAiNote] = useState('');
-  const [imagePreview, setImagePreview] = useState(null);
-  const [imageFile, setImageFile] = useState(null);
   const [posting, setPosting] = useState(false);
-  const fileRef = useRef(null);
   if (!isOpen) return null;
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -80,12 +77,9 @@ export default function PostModal({ isOpen, onClose, onSubmit }) {
         price: form.price,
         listingType: form.listingType,
         condition: isMarket ? form.condition : '',
-        imageFile: imageFile || null,
       });
       setForm(EMPTY);
       setAiNote('');
-      setImagePreview(null);
-      setImageFile(null);
       onClose();
     } finally {
       // Always clear: a failed post must not leave the button stuck disabled.
@@ -220,64 +214,6 @@ export default function PostModal({ isOpen, onClose, onSubmit }) {
             style={{ resize: 'vertical' }}
           />
         </Field>
-
-        {/* Image upload */}
-        <div style={{ marginBottom: 14 }}>
-          <span style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--ink-secondary)', marginBottom: 6 }}>
-            Photo (optional)
-          </span>
-          {imagePreview ? (
-            <div style={{ position: 'relative', display: 'inline-block' }}>
-              <img src={imagePreview} alt="Preview" style={{ maxHeight: 120, borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }} />
-              <button
-                type="button"
-                onClick={() => { setImagePreview(null); setImageFile(null); }}
-                className="btn btn-ghost btn-sm btn-icon"
-                style={{ position: 'absolute', top: 4, right: 4, background: 'var(--surface)', borderRadius: '50%', width: 28, height: 28, padding: 0 }}
-                aria-label="Remove image"
-              >
-                <Trash2 size={13} />
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              className="btn btn-ghost"
-              style={{ width: '100%', padding: '20px 0', border: '2px dashed var(--border)', borderRadius: 'var(--radius-md)' }}
-            >
-              <ImagePlus size={18} color="var(--ink-muted)" /> <span style={{ color: 'var(--ink-muted)', fontSize: 'var(--text-sm)' }}>Add a photo</span>
-            </button>
-          )}
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            style={{ display: 'none' }}
-            onChange={async (e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              setImageFile(file);
-              const reader = new FileReader();
-              reader.onload = (ev) => setImagePreview(ev.target.result);
-              reader.readAsDataURL(file);
-              setAiNote('🔍 Analyzing image with AI…');
-              const recognition = await recognizeItemFromImage(file);
-              if (recognition && recognition.title !== 'Item (auto-detected)') {
-                setForm((f) => ({
-                  ...f,
-                  title: recognition.title || f.title,
-                  category: recognition.category || f.category,
-                  description: recognition.description || f.description,
-                  condition: recognition.condition || f.condition,
-                }));
-                setAiNote('✨ AI recognized the item from your photo!');
-              } else {
-                setAiNote('');
-              }
-            }}
-          />
-        </div>
 
         <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} disabled={!valid || posting}>
           <PlusCircle size={16} /> {posting ? 'Posting…' : 'Post report'}
