@@ -82,9 +82,20 @@ service cloud.firestore {
     match /chats/{chatId} {
       allow read, update: if signedIn() && request.auth.uid in resource.data.participants;
       allow create: if signedIn() && request.auth.uid in request.resource.data.participants;
+      // Subcollection rules do NOT inherit the parent's gate. Without repeating
+      // the participant check here, any signed-in student who could guess a
+      // chat id could read the whole thread — which defeats the point of
+      // in-app chat and breaks the privacy requirement. Costs one extra
+      // document read per message; denormalising `participants` onto each
+      // message would avoid that if it ever matters.
       match /messages/{msgId} {
-        allow read: if signedIn();
-        allow create: if signedIn() && request.auth.uid == request.resource.data.senderUid;
+        function inThread() {
+          return signedIn()
+            && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+        }
+        allow read: if inThread();
+        allow create: if inThread() && request.auth.uid == request.resource.data.senderUid;
+        allow update, delete: if false;
       }
     }
 

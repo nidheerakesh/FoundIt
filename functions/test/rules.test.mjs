@@ -98,3 +98,194 @@ test('the client still cannot write server-owned match fields on the item', asyn
   await assertFails(updateDoc(doc(verified(OWNER), ITEM), { matchScore: 100 }));
   await assertFails(updateDoc(doc(verified(OWNER), ITEM), { status: 'resolved' }));
 });
+
+// ===========================================================================
+// The rest of the collections. Firestore rules are an architectural layer here
+// (ARCHITECTURE.md §8.3), so every server-owned field is checked from the
+// client side, where a real attacker would be.
+// ===========================================================================
+const unverified = (uid) => env.authenticatedContext(uid, { email_verified: false }).firestore();
+const mod = (uid) => env.authenticatedContext(uid, { email_verified: true, role: 'moderator' }).firestore();
+const anon = () => env.unauthenticatedContext().firestore();
+
+async function seedMarket() {
+  await env.clearFirestore();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, 'users/uid-seller'), { name: 'Arjun', trustScore: 70, role: 'user', strikes: 0 });
+    await setDoc(doc(db, 'listings/l1'), { title: 'Calculator', sellerUid: 'uid-seller', price: 500, status: 'active' });
+    await setDoc(doc(db, 'listings/l-sold'), { title: 'Cycle', sellerUid: 'uid-seller', status: 'sold' });
+    await setDoc(doc(db, 'notifications/n1'), { userId: 'uid-seller', type: 'match', message: 'hi', read: false });
+    await setDoc(doc(db, 'flags/f1'), { reporterUid: 'uid-buyer', targetType: 'item', targetId: 'x', status: 'open' });
+  });
+}
+
+// --- users -----------------------------------------------------------------
+test('users: profile docs are not readable while signed out', async () => {
+  await seedMarket();
+  await assertFails(getDoc(doc(anon(), 'users/uid-seller')));
+});
+
+test('users: you can edit your own profile but not your trust or role', async () => {
+  await seedMarket();
+  await assertSucceeds(updateDoc(doc(verified('uid-seller'), 'users/uid-seller'), { name: 'Arjun K' }));
+  await assertFails(updateDoc(doc(verified('uid-seller'), 'users/uid-seller'), { trustScore: 100 }));
+  await assertFails(updateDoc(doc(verified('uid-seller'), 'users/uid-seller'), { role: 'admin' }));
+  // keeps() compares values, so re-writing the same value is a legitimate
+  // no-op; only an actual change to a server-owned field is rejected.
+  await assertSucceeds(updateDoc(doc(verified('uid-seller'), 'users/uid-seller'), { strikes: 0, name: 'x' }));
+  await assertFails(updateDoc(doc(verified('uid-seller'), 'users/uid-seller'), { strikes: 5 }));
+});
+
+test('users: you cannot edit somebody else’s profile', async () => {
+  await seedMarket();
+  await assertFails(updateDoc(doc(verified('uid-buyer'), 'users/uid-seller'), { name: 'hacked' }));
+});
+
+// --- lost & found ----------------------------------------------------------
+test('items: an unverified account cannot post a report', async () => {
+  await seedMarket();
+  await assertFails(setDoc(doc(unverified('uid-new'), 'lostFoundItems/i9'),
+    { type: 'lost', title: 'Bag', postedBy: 'uid-new' }));
+});
+
+test('items: you cannot post a report in somebody else’s name', async () => {
+  await seedMarket();
+  await assertFails(setDoc(doc(verified('uid-buyer'), 'lostFoundItems/i9'),
+    { type: 'lost', title: 'Bag', postedBy: 'uid-seller' }));
+});
+
+// --- listings --------------------------------------------------------------
+test('listings: a verified student can list their own item', async () => {
+  await seedMarket();
+  await assertSucceeds(setDoc(doc(verified('uid-seller'), 'listings/l2'),
+    { title: 'Lab coat', sellerUid: 'uid-seller', price: 200, status: 'active' }));
+});
+
+test('listings: you cannot list on somebody else’s behalf', async () => {
+  await seedMarket();
+  await assertFails(setDoc(doc(verified('uid-buyer'), 'listings/l2'),
+    { title: 'Lab coat', sellerUid: 'uid-seller', price: 200 }));
+});
+
+test('listings: no client can mark a listing sold — that is the handshake’s job', async () => {
+  await seedMarket();
+  await assertFails(updateDoc(doc(verified('uid-seller'), 'listings/l1'), { status: 'sold' }));
+  await assertFails(updateDoc(doc(verified('uid-buyer'), 'listings/l1'), { reviewUnlocked: true }));
+});
+
+test('listings: a buyer may still place an offer', async () => {
+  await seedMarket();
+  await assertSucceeds(updateDoc(doc(verified('uid-buyer'), 'listings/l1'),
+    { lastOffer: { buyerUid: 'uid-buyer', amount: 450 } }));
+});
+
+// --- reviews ---------------------------------------------------------------
+test('reviews: allowed only after the referenced deal is sold (FR-18)', async () => {
+  await seedMarket();
+  await assertSucceeds(setDoc(doc(verified('uid-buyer'), 'reviews/rv1'),
+    { raterUid: 'uid-buyer', rateeUid: 'uid-seller', rating: 5, contextRef: 'l-sold' }));
+  await assertFails(setDoc(doc(verified('uid-buyer'), 'reviews/rv2'),
+    { raterUid: 'uid-buyer', rateeUid: 'uid-seller', rating: 5, contextRef: 'l1' }));
+});
+
+test('reviews: no self-reviews and no out-of-range ratings', async () => {
+  await seedMarket();
+  await assertFails(setDoc(doc(verified('uid-seller'), 'reviews/rv3'),
+    { raterUid: 'uid-seller', rateeUid: 'uid-seller', rating: 5, contextRef: 'l-sold' }));
+  await assertFails(setDoc(doc(verified('uid-buyer'), 'reviews/rv4'),
+    { raterUid: 'uid-buyer', rateeUid: 'uid-seller', rating: 9, contextRef: 'l-sold' }));
+});
+
+test('reviews: cannot be edited or deleted once written', async () => {
+  await seedMarket();
+  await assertSucceeds(setDoc(doc(verified('uid-buyer'), 'reviews/rv1'),
+    { raterUid: 'uid-buyer', rateeUid: 'uid-seller', rating: 5, contextRef: 'l-sold' }));
+  await assertFails(updateDoc(doc(verified('uid-buyer'), 'reviews/rv1'), { rating: 1 }));
+});
+
+// --- flags -----------------------------------------------------------------
+test('flags: a student can report content but cannot read the queue', async () => {
+  await seedMarket();
+  await assertSucceeds(setDoc(doc(verified('uid-buyer'), 'flags/f2'),
+    { reporterUid: 'uid-buyer', targetType: 'item', targetId: 'x', status: 'open' }));
+  await assertFails(getDoc(doc(verified('uid-buyer'), 'flags/f1')));
+});
+
+test('flags: a moderator can read and resolve the queue', async () => {
+  await seedMarket();
+  await assertSucceeds(getDoc(doc(mod('uid-mod'), 'flags/f1')));
+  await assertSucceeds(updateDoc(doc(mod('uid-mod'), 'flags/f1'), { status: 'resolved' }));
+});
+
+// --- notifications ---------------------------------------------------------
+test('notifications: you read only your own, and no client can write them', async () => {
+  await seedMarket();
+  await assertSucceeds(getDoc(doc(verified('uid-seller'), 'notifications/n1')));
+  await assertFails(getDoc(doc(verified('uid-buyer'), 'notifications/n1')));
+  await assertFails(setDoc(doc(verified('uid-seller'), 'notifications/n2'),
+    { userId: 'uid-seller', type: 'match', message: 'fake' }));
+});
+
+// --- reference data --------------------------------------------------------
+test('campusZones: readable by anyone, writable by no client (FR-24)', async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'campusZones/lib'), { name: 'Central Library', adjacent: [] });
+  });
+  await assertSucceeds(getDoc(doc(anon(), 'campusZones/lib')));
+  await assertFails(setDoc(doc(mod('uid-mod'), 'campusZones/evil'), { name: 'x', adjacent: [] }));
+});
+
+// --- chats (FR-17) ---------------------------------------------------------
+async function seedChat() {
+  await env.clearFirestore();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, 'chats/c1'), { participants: ['uid-a', 'uid-b'], itemRef: 'item-1' });
+    await setDoc(doc(db, 'chats/c1/messages/m1'), { senderUid: 'uid-a', text: 'is this mine?' });
+  });
+}
+
+test('chats: a participant can read the thread', async () => {
+  await seedChat();
+  await assertSucceeds(getDoc(doc(verified('uid-a'), 'chats/c1')));
+  await assertSucceeds(getDoc(doc(verified('uid-b'), 'chats/c1')));
+});
+
+test('chats: an outsider cannot read the thread', async () => {
+  await seedChat();
+  await assertFails(getDoc(doc(verified('uid-c'), 'chats/c1')));
+});
+
+test('chats: you cannot open a thread you are not part of', async () => {
+  await seedChat();
+  await assertFails(setDoc(doc(verified('uid-c'), 'chats/c2'), { participants: ['uid-a', 'uid-b'] }));
+  await assertSucceeds(setDoc(doc(verified('uid-c'), 'chats/c3'), { participants: ['uid-c', 'uid-a'] }));
+});
+
+test('chats: you cannot post a message under somebody else’s name', async () => {
+  await seedChat();
+  await assertFails(setDoc(doc(verified('uid-b'), 'chats/c1/messages/m2'),
+    { senderUid: 'uid-a', text: 'spoofed' }));
+  await assertSucceeds(setDoc(doc(verified('uid-b'), 'chats/c1/messages/m2'),
+    { senderUid: 'uid-b', text: 'yes, describe the lid' }));
+});
+
+test('chats: an outsider cannot read the messages either (privacy)', async () => {
+  await seedChat();
+  // Regression: subcollection rules do not inherit the parent chat's gate, so
+  // this was readable by any signed-in account until the check was repeated.
+  await assertFails(getDoc(doc(verified('uid-outsider'), 'chats/c1/messages/m1')));
+  await assertSucceeds(getDoc(doc(verified('uid-a'), 'chats/c1/messages/m1')));
+});
+
+test('chats: an outsider cannot post into a thread', async () => {
+  await seedChat();
+  await assertFails(setDoc(doc(verified('uid-outsider'), 'chats/c1/messages/m3'),
+    { senderUid: 'uid-outsider', text: 'butting in' }));
+});
+
+test('chats: messages are immutable once sent', async () => {
+  await seedChat();
+  await assertFails(updateDoc(doc(verified('uid-a'), 'chats/c1/messages/m1'), { text: 'edited' }));
+});
