@@ -28,7 +28,21 @@ export default function App() {
   const { isAuthed, isVerified, poster, user, redirectError } = useAuth();
   const { items: liveItems, loading, error } = useFeed();
   // Fall back to mock data if the emulator/backend isn't reachable, so dev never breaks.
-  const items = error || (!loading && liveItems.length === 0) ? INITIAL_ITEMS : liveItems;
+  const baseItems = error || (!loading && liveItems.length === 0) ? INITIAL_ITEMS : liveItems;
+
+  // matchScore is normally written by the suggestMatches Cloud Function, which
+  // needs the Blaze plan to deploy. Compute it in the client too so a freshly
+  // posted lost/found pair still surfaces a match: the server value always wins
+  // when present, this only fills the gap. Same scoring factors either way.
+  const items = useMemo(() => {
+    const pairable = baseItems.some((i) => i.type === 'lost' || i.type === 'found');
+    if (!pairable) return baseItems;
+    return baseItems.map((item) => {
+      if (item.type === 'marketplace' || item.matchScore) return item;
+      const best = findMatchesForItem(item, baseItems)[0];
+      return best ? { ...item, matchScore: best.score, matchedWith: [best.candidate.id] } : item;
+    });
+  }, [baseItems]);
 
   const [activeTab, setActiveTab] = useState('all'); // all | lost_found | marketplace
   const [selectedLocation, setSelectedLocation] = useState('All Campus Locations');
