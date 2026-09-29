@@ -10,6 +10,8 @@ import {
   applyActionCode,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
@@ -82,29 +84,63 @@ export async function login({ email, password }) {
   return user;
 }
 
+function googleProvider() {
+  const provider = new GoogleAuthProvider();
+  // `hd` only pre-filters Google's account chooser — it is a UI hint the client
+  // controls, not a guarantee, so the domain is re-checked by enforceCampusAccount
+  // on every path before we keep the session.
+  if (CAMPUS_DOMAIN) provider.setCustomParameters({ hd: CAMPUS_DOMAIN });
+  return provider;
+}
+
+/** Drop any session whose email is outside the campus domain. */
+async function enforceCampusAccount(user) {
+  if (isCampusEmail(user.email || '')) return user;
+  await signOut(auth);
+  const err = new Error(`That Google account isn't a campus account. ${campusDomainHint()}`.trim());
+  err.code = 'auth/not-campus-email';
+  throw err;
+}
+
+// Popup is the nicer flow, but browsers block it when the click isn't trusted
+// (and some block it outright). These are the codes worth a redirect retry.
+const POPUP_UNAVAILABLE = new Set([
+  'auth/popup-blocked',
+  'auth/operation-not-supported-in-this-environment',
+  'auth/web-storage-unsupported',
+]);
+
 /**
  * Google sign-in, restricted to the campus Workspace domain.
  * Google accounts arrive with emailVerified already true, so these users skip
  * the email verification step entirely.
+ *
+ * Falls back to a full-page redirect when the popup is blocked; in that case the
+ * browser navigates away and completeGoogleRedirect() finishes the job on return.
  */
 export async function signInWithGoogle() {
-  const provider = new GoogleAuthProvider();
-  // `hd` only pre-filters Google's account chooser — it is a UI hint the client
-  // controls, not a guarantee, so the domain is re-checked below before we keep
-  // the session.
-  if (CAMPUS_DOMAIN) provider.setCustomParameters({ hd: CAMPUS_DOMAIN });
-
-  const { user } = await signInWithPopup(auth, provider);
-
-  if (!isCampusEmail(user.email || '')) {
-    await signOut(auth);
-    const err = new Error(`That Google account isn't a campus account. ${campusDomainHint()}`.trim());
-    err.code = 'auth/not-campus-email';
-    throw err;
+  try {
+    const { user } = await signInWithPopup(auth, googleProvider());
+    await enforceCampusAccount(user);
+    await ensureUserProfile(user);
+    return user;
+  } catch (err) {
+    if (!POPUP_UNAVAILABLE.has(err.code)) throw err;
+    await signInWithRedirect(auth, googleProvider());
+    return null; // unreachable in practice — the page navigates away
   }
+}
 
-  await ensureUserProfile(user);
-  return user;
+/**
+ * Finish a redirect-based Google sign-in. Safe to call on every app load: it
+ * resolves to null when the user did not just come back from a redirect.
+ */
+export async function completeGoogleRedirect() {
+  const result = await getRedirectResult(auth);
+  if (!result) return null;
+  await enforceCampusAccount(result.user);
+  await ensureUserProfile(result.user);
+  return result.user;
 }
 
 export function logout() {

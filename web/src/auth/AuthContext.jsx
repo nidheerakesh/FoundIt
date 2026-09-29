@@ -5,7 +5,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { COL } from '../types';
-import { ensureUserProfile } from './authApi';
+import { ensureUserProfile, completeGoogleRedirect } from './authApi';
 
 const AuthContext = createContext(null);
 
@@ -13,6 +13,14 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);       // firebase auth user
   const [profile, setProfile] = useState(null); // users/{uid} doc
   const [loading, setLoading] = useState(true);
+  const [redirectError, setRedirectError] = useState('');
+
+  // Finish a Google sign-in that fell back to a full-page redirect. No-op on a
+  // normal load. Rejects when the returning account is outside the campus
+  // domain — enforceCampusAccount has already signed it back out by then.
+  useEffect(() => {
+    completeGoogleRedirect().catch((err) => setRedirectError(err.message));
+  }, []);
 
   useEffect(() => {
     let unsubProfile = () => {};
@@ -51,6 +59,8 @@ export function AuthProvider({ children }) {
     loading,
     isAuthed: !!user,
     isVerified: !!user?.emailVerified,
+    redirectError,
+    clearRedirectError: () => setRedirectError(''),
     refreshUser,
     // Poster identity used by feed writers.
     poster: profile

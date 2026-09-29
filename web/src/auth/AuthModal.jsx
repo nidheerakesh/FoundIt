@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X, ShieldCheck, Compass } from 'lucide-react';
 import { register, login, resetPassword, signInWithGoogle, campusDomainHint } from './authApi';
+import { useAuth } from './AuthContext';
 
 const FRIENDLY = {
   'auth/invalid-credential': 'Wrong email or password.',
@@ -28,6 +29,7 @@ export default function AuthModal({ isOpen, onClose }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const { redirectError, clearRedirectError } = useAuth();
 
   if (!isOpen) return null;
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -57,6 +59,7 @@ export default function AuthModal({ isOpen, onClose }) {
   const google = async () => {
     setError('');
     setNotice('');
+    clearRedirectError();
     setBusy(true);
     try {
       await signInWithGoogle();
@@ -167,7 +170,7 @@ export default function AuthModal({ isOpen, onClose }) {
           </div>
         )}
 
-        {error && <Banner tone="error">{error}</Banner>}
+        {(error || redirectError) && <Banner tone="error">{error || redirectError}</Banner>}
         {notice && <Banner tone="ok">{notice}</Banner>}
 
         <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: 6 }} disabled={busy}>
