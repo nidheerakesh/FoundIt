@@ -12,6 +12,7 @@ import DealModal from './components/DealModal';
 import FlagModal from './components/FlagModal';
 import AIAssistantModal from './components/AIAssistantModal';
 import ProfileModal from './components/ProfileModal';
+import ModerationPanel from './components/ModerationPanel';
 import HowItWorks from './components/HowItWorks';
 import { INITIAL_ITEMS } from './data/mockData';
 import { useFeed } from './hooks/useFeed';
@@ -44,6 +45,7 @@ export default function App() {
   const [isFlagOpen, setIsFlagOpen] = useState(false);
   const [isSmartMatchOpen, setIsSmartMatchOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isModerationOpen, setIsModerationOpen] = useState(false);
   const [toast, setToast] = useState('');
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem('foundit-theme');
@@ -182,7 +184,7 @@ export default function App() {
         setSearchQuery={setSearchQuery}
         onOpenPost={openPost}
         smartMatchCount={stats.matches}
-        accountSlot={<AccountMenu onLogin={() => setIsAuthOpen(true)} onOpenProfile={() => setIsProfileOpen(true)} />}
+        accountSlot={<AccountMenu onLogin={() => setIsAuthOpen(true)} onOpenProfile={() => setIsProfileOpen(true)} onOpenModeration={() => setIsModerationOpen(true)} />}
         onOpenAI={() => setIsAIOpen(true)}
       />
 
@@ -281,6 +283,7 @@ export default function App() {
       <PostModal isOpen={isPostOpen} onClose={() => setIsPostOpen(false)} onSubmit={addItem} />
       <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} />
       <ProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
+      <ModerationPanel isOpen={isModerationOpen} onClose={() => setIsModerationOpen(false)} onToast={showToast} />
 
       <ClaimModal
         isOpen={isClaimOpen}

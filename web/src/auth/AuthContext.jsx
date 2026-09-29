@@ -62,6 +62,11 @@ export function AuthProvider({ children }) {
     loading,
     isAuthed: !!user,
     isVerified: !!user?.emailVerified,
+    // Mirrored from users/{uid} for UI gating only. The authoritative check is
+    // the custom claim in the ID token, which firestore.rules and the callables
+    // read — a user editing this field cannot grant themselves anything.
+    role: profile?.role || 'user',
+    isMod: profile?.role === 'moderator' || profile?.role === 'admin',
     redirectError,
     clearRedirectError: () => setRedirectError(''),
     refreshUser,

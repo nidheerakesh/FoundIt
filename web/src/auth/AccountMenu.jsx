@@ -1,13 +1,13 @@
 import { useState } from 'react';
-import { LogOut, User, UserCircle } from 'lucide-react';
+import { LogOut, User, UserCircle, ShieldAlert } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { logout } from './authApi';
 import TrustBadge from '../components/TrustBadge';
 import NotificationBell from '../components/NotificationBell';
 
 // Navbar account control: "Sign in" when logged out; avatar + dropdown when in.
-export default function AccountMenu({ onLogin, onOpenProfile }) {
-  const { isAuthed, profile } = useAuth();
+export default function AccountMenu({ onLogin, onOpenProfile, onOpenModeration }) {
+  const { isAuthed, profile, isMod, role } = useAuth();
   const [open, setOpen] = useState(false);
 
   if (!isAuthed) {
@@ -53,6 +53,16 @@ export default function AccountMenu({ onLogin, onOpenProfile }) {
             <button className="btn btn-ghost btn-sm" style={{ width: '100%', marginBottom: 6 }} onClick={() => { setOpen(false); onOpenProfile?.(); }}>
               <UserCircle size={14} /> My Profile
             </button>
+            {isMod && (
+              <button
+                className="btn btn-ghost btn-sm"
+                style={{ width: '100%', marginBottom: 6, color: 'var(--lost)' }}
+                onClick={() => { setOpen(false); onOpenModeration?.(); }}
+              >
+                <ShieldAlert size={14} /> Moderation queue
+                <span style={{ marginLeft: 'auto', fontSize: 'var(--text-xs)', opacity: 0.7 }}>{role}</span>
+              </button>
+            )}
             <button className="btn btn-ghost btn-sm" style={{ width: '100%' }} onClick={() => { setOpen(false); logout(); }}>
               <LogOut size={14} /> Sign out
             </button>

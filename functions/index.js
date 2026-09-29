@@ -225,7 +225,13 @@ exports.confirmTransaction = onCall(async (req) => {
 // ---------------------------------------------------------------------------
 // onFlagCreated — auto-hide over threshold + notify moderators
 // ---------------------------------------------------------------------------
-const TARGET_COLLECTION = { item: 'lostFoundItems', listing: 'listings', user: 'users', chat: 'chats' };
+const TARGET_COLLECTION = {
+  item: 'lostFoundItems',
+  listing: 'listings',
+  user: 'users',
+  chat: 'chats',
+  review: 'reviews',
+};
 
 exports.onFlagCreated = onDocumentCreated('flags/{flagId}', async (event) => {
   const flag = event.data?.data();
@@ -289,7 +295,8 @@ exports.resolveFlag = onCall(async (req) => {
     const col = TARGET_COLLECTION[flag.targetType];
     if (col && col !== 'users') {
       const t = await db.collection(col).doc(flag.targetId).get();
-      const owner = t.exists ? (t.data().postedBy || t.data().sellerUid) : null;
+      // postedBy = lost/found item, sellerUid = listing, raterUid = review author.
+      const owner = t.exists ? (t.data().postedBy || t.data().sellerUid || t.data().raterUid) : null;
       if (owner) {
         await db.collection('users').doc(owner).set({ strikes: FieldValue.increment(1) }, { merge: true });
         await recomputeTrust(owner);
