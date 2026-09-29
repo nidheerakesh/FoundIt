@@ -13,7 +13,10 @@ setGlobalOptions({ region: 'us-central1', maxInstances: 10 });
 const db = getFirestore();
 
 const MATCH_THRESHOLD = 50; // surface candidates at/above this (tuned to seed data; see SCORING.md)
-const MATCH_FIELDS = ['type', 'category', 'zoneId', 'status', 'title', 'description'];
+// Inputs to the match score. `status` is deliberately absent: this function
+// writes it, so including it made every self-write look like a content edit and
+// re-triggered a full recompute. Eligibility by status is checked separately.
+const MATCH_FIELDS = ['type', 'category', 'zoneId', 'title', 'description'];
 const AUTO_HIDE_THRESHOLD = 3; // flags before content auto-hides
 
 // ---------------------------------------------------------------------------
@@ -90,15 +93,31 @@ exports.suggestMatches = onDocumentWritten('lostFoundItems/{itemId}', async (eve
   scored.sort((a, b) => b.score - a.score);
   const top = scored.slice(0, 5);
 
-  const hadMatch = before?.exists && before.data().matchScore != null;
+  const nextMatched = top.map((s) => s.id);
+  const nextScore = top.length ? top[0].score : null;
+
+  // This function writes `status`, which is itself a match input, so its own
+  // write re-fires this trigger. Bail out when the recomputed result already
+  // matches what is stored: the re-entrant pass becomes a no-op instead of a
+  // second write (and, below, a duplicate notification).
+  const storedScore = item.matchScore ?? null;
+  const settled = JSON.stringify(item.matchedWith || []) === JSON.stringify(nextMatched)
+    && storedScore === nextScore;
+  if (settled) return;
+
   await after.ref.set(
     {
-      matchedWith: top.map((s) => s.id),
-      matchScore: top.length ? top[0].score : null,
+      matchedWith: nextMatched,
+      matchScore: nextScore,
       status: top.length ? 'matched' : (item.status || 'open'),
     },
     { merge: true }
   );
+
+  // Freshness comes from the doc we just read, not from `before`: on a
+  // re-entrant pass `before` still holds the pre-write state, which made this
+  // read as a new match twice and sent the poster two notifications.
+  const hadMatch = storedScore != null;
 
   // Notify the poster when a fresh match appears (not on every recompute).
   if (top.length && !hadMatch) {

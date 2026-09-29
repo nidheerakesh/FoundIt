@@ -145,12 +145,14 @@ async function enforceCampusAccount(user) {
   throw err;
 }
 
-// Popup is the nicer flow, but browsers block it when the click isn't trusted
-// (and some block it outright). These are the codes worth a redirect retry.
+// Redirect is only a real fallback where popups genuinely do not exist (in-app
+// webviews). It is NOT used for `auth/popup-blocked`: the redirect handshake
+// runs against the firebaseapp.com authDomain, which is a third party to the
+// deployed origin, so Chrome's storage partitioning drops the result and the
+// user silently lands back signed out. A blocked popup is better reported than
+// papered over with a flow that fails invisibly.
 const POPUP_UNAVAILABLE = new Set([
-  'auth/popup-blocked',
   'auth/operation-not-supported-in-this-environment',
-  'auth/web-storage-unsupported',
 ]);
 
 /**

@@ -24,7 +24,7 @@ import VerifyBanner from './auth/VerifyBanner';
 import { SearchX, PlusCircle, Compass, Users, Moon, Sun, Sparkles } from 'lucide-react';
 
 export default function App() {
-  const { isAuthed, isVerified, poster, user } = useAuth();
+  const { isAuthed, isVerified, poster, user, redirectError } = useAuth();
   const { items: liveItems, loading, error } = useFeed();
   // Fall back to mock data if the emulator/backend isn't reachable, so dev never breaks.
   const items = error || (!loading && liveItems.length === 0) ? INITIAL_ITEMS : liveItems;
@@ -55,6 +55,16 @@ export default function App() {
     setToast(msg);
     setTimeout(() => setToast(''), 3200);
   };
+
+  // A rejected Google redirect lands on a freshly loaded page with the auth
+  // modal closed, so the reason was invisible and the user just saw themselves
+  // signed out. Reopen the modal, which renders the error.
+  useEffect(() => {
+    if (redirectError) {
+      setIsAuthOpen(true);
+      showToast(redirectError);
+    }
+  }, [redirectError]);
 
   // Only signed-in + verified users can post (SRS FR-1).
   const openPost = () => {

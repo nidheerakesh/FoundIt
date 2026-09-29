@@ -12,7 +12,8 @@ const FRIENDLY = {
   'auth/not-campus-email': null, // message is already friendly
   'auth/popup-closed-by-user': 'Sign-in window closed before finishing.',
   'auth/cancelled-popup-request': 'Sign-in window closed before finishing.',
-  'auth/popup-blocked': 'Your browser blocked the sign-in window. Allow popups and try again.',
+  'auth/popup-blocked':
+    'Your browser blocked the Google sign-in window. Click the blocked-popup icon at the right of the address bar, allow popups for this site, then try again.',
   'auth/account-exists-with-different-credential':
     'This email is already registered with a password. Sign in with your password instead.',
   'auth/operation-not-allowed': 'This sign-in method is turned off for the project.',
