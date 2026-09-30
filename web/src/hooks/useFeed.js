@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
 import { subscribeFeed } from '../lib/feed';
+import { INITIAL_ITEMS } from '../data/mockData';
 
 /**
  * Live campus feed from Firestore (lostFoundItems + listings merged).
+ * Falls back to INITIAL_ITEMS when Firebase is unreachable, so the page
+ * is never blank during development or before the seed has run.
  * @returns {{ items: any[], loading: boolean, error: Error|null }}
  */
 export function useFeed() {
@@ -16,12 +19,10 @@ export function useFeed() {
       if (!resolved) {
         // eslint-disable-next-line no-console
         console.warn('[FoundIt] Feed snapshot timeout — falling back to mock data.');
+        setItems(INITIAL_ITEMS);
         setError(new Error('Backend timeout'));
         setLoading(false);
       }
-      // 2.5s was short enough that a cold backend or a slow network silently
-      // swapped the live feed for mock data. The UI looks correct either way,
-      // so the substitution is easy to miss — give the real backend room.
     }, 8000);
 
     const unsub = subscribeFeed(
@@ -29,15 +30,13 @@ export function useFeed() {
         resolved = true;
         clearTimeout(timer);
         setItems(cards);
-        // Clear a previous timeout: without this the mock-data fallback is
-        // permanent for the session, because App keys off `error` and a late
-        // snapshot would never win the feed back.
         setError(null);
         setLoading(false);
       },
       (err) => {
         resolved = true;
         clearTimeout(timer);
+        setItems(INITIAL_ITEMS);
         setError(err);
         setLoading(false);
       }

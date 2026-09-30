@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, Send, MessageCircle, MapPin, Tag } from 'lucide-react';
-import { getOrCreateChat, sendMessage, subscribeMessages } from '../lib/chat';
+import { getOrCreateChat, sendMessage, subscribeMessages, markChatRead } from '../lib/chat';
 
 const QUICK_PROMPTS = [
   'Is this still available?',
@@ -18,6 +18,7 @@ export default function ChatModal({
   target = null,
 }) {
   const [chatId, setChatId] = useState(null);
+  const [chatTargetUid, setChatTargetUid] = useState(null);
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(true);
@@ -59,6 +60,8 @@ export default function ChatModal({
       return undefined;
     }
 
+    setChatTargetUid(targetUid);
+
     getOrCreateChat({
       targetUid,
       targetName,
@@ -67,6 +70,7 @@ export default function ChatModal({
     })
       .then((id) => {
         setChatId(id);
+        markChatRead(id, currentUser.uid);
         unsub = subscribeMessages(id, (msgs) => {
           setMessages(msgs);
           setLoading(false);
@@ -93,7 +97,7 @@ export default function ChatModal({
     setSending(true);
     setInputText('');
     try {
-      await sendMessage(chatId, text, currentUser);
+      await sendMessage(chatId, text, currentUser, chatTargetUid);
     } catch (err) {
       setError(`Failed to send: ${err.message}`);
     } finally {

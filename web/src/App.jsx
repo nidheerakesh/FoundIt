@@ -16,6 +16,7 @@ import AIAssistantModal from './components/AIAssistantModal';
 import ProfileModal from './components/ProfileModal';
 import ModerationPanel from './components/ModerationPanel';
 import OffersModal from './components/OffersModal';
+import ChatsListModal from './components/ChatsListModal';
 import HowItWorks from './components/HowItWorks';
 import { useFeed } from './hooks/useFeed';
 import { addLostFound, addListing, updateLostFound, updateListing, getItemDetail } from './lib/feed';
@@ -68,6 +69,7 @@ export default function App() {
   const [isSmartMatchOpen, setIsSmartMatchOpen] = useState(false);
   const [isClaimsReviewOpen, setIsClaimsReviewOpen] = useState(false);
   const [isOffersOpen, setIsOffersOpen] = useState(false);
+  const [isChatsListOpen, setIsChatsListOpen] = useState(false);
   const [isMyClaimsOpen, setIsMyClaimsOpen] = useState(false);
   // itemId → status of the signed-in user's claim on it, so a card you have
   // already claimed says so instead of inviting a duplicate claim.
@@ -284,7 +286,7 @@ export default function App() {
         setSearchQuery={setSearchQuery}
         onOpenPost={openPost}
         smartMatchCount={stats.matches}
-        accountSlot={<AccountMenu onLogin={() => setIsAuthOpen(true)} onOpenProfile={() => setIsProfileOpen(true)} onOpenModeration={() => setIsModerationOpen(true)} onOpenMyClaims={() => setIsMyClaimsOpen(true)} />}
+        accountSlot={<AccountMenu onLogin={() => setIsAuthOpen(true)} onOpenProfile={() => setIsProfileOpen(true)} onOpenModeration={() => setIsModerationOpen(true)} onOpenMyClaims={() => setIsMyClaimsOpen(true)} onOpenChats={() => { if (!isAuthed) { showToast('Sign in to view messages.'); setIsAuthOpen(true); return; } setIsChatsListOpen(true); }} />}
         onOpenAI={() => setIsAIOpen(true)}
       />
 
@@ -423,6 +425,13 @@ export default function App() {
         candidates={claimCandidates}
         onClaimSuccess={(msg) => showToast(msg)}
         onOpenChat={(it, who) => handleOpenChat(it, who)}
+      />
+
+      <ChatsListModal
+        isOpen={isChatsListOpen}
+        onClose={() => setIsChatsListOpen(false)}
+        currentUser={poster || user}
+        onOpenChat={handleOpenChat}
       />
 
       <ChatModal

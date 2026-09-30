@@ -201,7 +201,9 @@ service cloud.firestore {
       // with "Missing or insufficient permissions". Nothing lists chats, so
       // get-only is enough and list stays closed.
       allow get: if signedIn() && (resource == null || request.auth.uid in resource.data.participants);
-      allow list: if false;
+      // list is needed for the "My chats" inbox query (array-contains participants).
+      // Rules evaluate per document, so only docs where the user is a participant pass.
+      allow list: if signedIn() && request.auth.uid in resource.data.participants;
       allow update: if signedIn() && request.auth.uid in resource.data.participants;
       allow create: if signedIn() && request.auth.uid in request.resource.data.participants;
       // Subcollection rules do NOT inherit the parent's gate. Without repeating

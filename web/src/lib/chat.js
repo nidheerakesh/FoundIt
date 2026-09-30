@@ -4,10 +4,13 @@ import {
   setDoc,
   addDoc,
   getDoc,
+  updateDoc,
   onSnapshot,
   query,
+  where,
   orderBy,
   serverTimestamp,
+  increment,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { COL } from '../types';
@@ -41,6 +44,8 @@ export async function getOrCreateChat({ targetUid, targetName, contextItem, curr
       contextTitle: contextItem?.title || '',
       lastMessage: '',
       lastMessageAt: serverTimestamp(),
+      lastSenderUid: '',
+      unreadCounts: { [currentUser.uid]: 0, [targetUid]: 0 },
       createdAt: serverTimestamp(),
     });
   }
@@ -48,15 +53,14 @@ export async function getOrCreateChat({ targetUid, targetName, contextItem, curr
   return chatId;
 }
 
-/** Send a message in a chat thread. */
-export async function sendMessage(chatId, text, currentUser) {
+/** Send a message in a chat thread. otherUid increments their unread count. */
+export async function sendMessage(chatId, text, currentUser, otherUid = null) {
   if (!text.trim()) return;
   const messagesCol = collection(db, COL.chats, chatId, 'messages');
   const chatRef = doc(db, COL.chats, chatId);
 
   const cleanText = text.trim();
 
-  // Add message subdoc
   await addDoc(messagesCol, {
     senderUid: currentUser.uid,
     senderName: currentUser.name || currentUser.displayName || 'You',
@@ -64,15 +68,16 @@ export async function sendMessage(chatId, text, currentUser) {
     sentAt: serverTimestamp(),
   });
 
-  // Update chat summary
-  await setDoc(
-    chatRef,
-    {
-      lastMessage: cleanText,
-      lastMessageAt: serverTimestamp(),
-    },
-    { merge: true }
-  );
+  const update = {
+    lastMessage: cleanText,
+    lastMessageAt: serverTimestamp(),
+    lastSenderUid: currentUser.uid,
+  };
+  if (otherUid) {
+    update[`unreadCounts.${otherUid}`] = increment(1);
+  }
+
+  await setDoc(chatRef, update, { merge: true });
 }
 
 /** Listen to real-time messages in a chat thread. */
@@ -92,4 +97,33 @@ export function subscribeMessages(chatId, cb) {
       console.warn('[FoundIt] Failed to listen to chat messages:', err);
     }
   );
+}
+
+/** Subscribe to all chats the user participates in, sorted by latest message. */
+export function subscribeMyChats(uid, cb) {
+  if (!uid) return () => {};
+  const q = query(
+    collection(db, COL.chats),
+    where('participants', 'array-contains', uid),
+    orderBy('lastMessageAt', 'desc')
+  );
+  return onSnapshot(
+    q,
+    (snap) => {
+      const chats = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      cb(chats);
+    },
+    (err) => {
+      console.warn('[FoundIt] Failed to load chats:', err);
+      cb([]);
+    }
+  );
+}
+
+/** Mark a chat as read for uid — resets their unread counter. */
+export async function markChatRead(chatId, uid) {
+  if (!chatId || !uid) return;
+  await updateDoc(doc(db, COL.chats, chatId), {
+    [`unreadCounts.${uid}`]: 0,
+  });
 }
