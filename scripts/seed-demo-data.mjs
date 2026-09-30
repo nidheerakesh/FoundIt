@@ -93,18 +93,23 @@ const DEMO = {
 };
 const missing = [];
 for (const p of Object.values(DEMO)) {
-  try { p.uid = (await getAuth().getUserByEmail(p.email)).uid; } catch { missing.push(p.email); }
+  try { p.uid = (await getAuth().getUserByEmail(p.email)).uid; }
+  catch { p.uid = `demo-user-${p.email.split('.')[0]}`; missing.push(p.email); }
 }
 if (missing.length) {
-  console.error(`Demo accounts missing in ${PROJECT}: ${missing.join(', ')}`);
-  console.error('Create them first: DEMO_PASSWORD=… node scripts/seed-demo-users.mjs' + (EMULATED ? '' : ` --project ${PROJECT}`));
-  process.exit(1);
+  console.warn(`Demo auth accounts not found — using placeholder UIDs for: ${missing.join(', ')}`);
+  console.warn('Data will display fine. For interactive login, run: DEMO_PASSWORD=… node scripts/seed-demo-users.mjs' + (EMULATED ? '' : ` --project ${PROJECT}`));
 }
-// Background students: they make the feed look lived-in. They have no login.
+// Background students: real CSE311 classmates. No login account.
 const BG = {
-  kabir:  { uid: 'demo-user-kabir',  name: 'Kabir Menon',  dept: 'ME',       trust: 66, rating: 4.2, ratings: 3, resolved: 2 },
-  ananya: { uid: 'demo-user-ananya', name: 'Ananya Rao',   dept: 'BioTech',  trust: 71, rating: 4.6, ratings: 5, resolved: 2 },
-  rahul:  { uid: 'demo-user-rahul',  name: 'Rahul Verma',  dept: 'CSE',      trust: 58, rating: 4.0, ratings: 2, resolved: 1 },
+  kabir:  { uid: 'demo-user-kabir',  name: 'Nihar Shiju',         dept: 'CS',  trust: 66, rating: 4.2, ratings: 3, resolved: 2 },
+  ananya: { uid: 'demo-user-ananya', name: 'Pavana P',             dept: 'CS',  trust: 71, rating: 4.6, ratings: 5, resolved: 2 },
+  rahul:  { uid: 'demo-user-rahul',  name: 'Saksham Singh',        dept: 'CS',  trust: 58, rating: 4.0, ratings: 2, resolved: 1 },
+  gowtham:{ uid: 'demo-user-gowtham',name: 'Gowtham Kumar C',      dept: 'CS',  trust: 63, rating: 4.1, ratings: 2, resolved: 1 },
+  mishal: { uid: 'demo-user-mishal', name: 'Mishal Sabu',          dept: 'CS',  trust: 69, rating: 4.3, ratings: 3, resolved: 1 },
+  rishabh:{ uid: 'demo-user-rishabh',name: 'Rishabh Pandey',       dept: 'CS',  trust: 61, rating: 4.0, ratings: 2, resolved: 1 },
+  puja:   { uid: 'demo-user-puja',   name: 'Ganesula Puja Harshini',dept: 'CS', trust: 74, rating: 4.5, ratings: 4, resolved: 2 },
+  noel:   { uid: 'demo-user-noel',   name: 'Noel Manoj',           dept: 'CS',  trust: 67, rating: 4.2, ratings: 2, resolved: 1 },
 };
 const P = { ...DEMO, ...BG };
 const tier = (t) => (t >= 85 ? 'star' : t >= 75 ? 'reliable' : t >= 60 ? 'trusted' : 'neutral');
@@ -169,15 +174,20 @@ const reports = [
   // Pair 3 — adjacent zones: Meera found Arjun's charger in the library.
   ['demo-lf-charger-lost', 'lost',  'Grey Dell Laptop Charger', '65W Dell charger with a frayed sticker on the brick. Left in the Innovation Lab during the hackathon.', 'Electronics', 'Innovation & Computer Lab', P.arjun, 30],
   ['demo-lf-charger-found','found', 'Dell 65W Charger', 'Grey Dell laptop charger plugged in at a library charging point, nobody came back for it.', 'Electronics', 'Central Library', P.meera, 26],
-  // Singles.
-  ['demo-lf-idcard',       'found', 'Campus ID Card — Ananya R.', 'Student ID found near the mess counter after lunch. BioTech 2nd year.', 'ID & Cards', 'Central Mess & Canteen', P.kabir, 8],
-  ['demo-lf-bracelet',     'lost',  'Silver Bracelet', 'Thin silver chain bracelet with a small star charm. Lost around the basketball court in the evening.', 'Accessories', 'Sports Complex', P.ananya, 40],
-  ['demo-lf-hoodie',       'lost',  'Navy Decathlon Hoodie', 'Navy blue Decathlon hoodie, size M, left on a chair in the hostel common room.', 'Clothing & Gear', 'Hostel Complex', P.rahul, 52],
-  ['demo-lf-specs',        'found', 'Spectacles in Brown Case', 'Black-framed glasses in a brown Titan case, found on a desk in LH-101.', 'Accessories', 'Lecture Halls (LH)', P.ananya, 12],
-  ['demo-lf-cyclekey',     'lost',  'Cycle Lock Key with Red Tag', 'Small key on a red plastic tag, for a Hero cycle lock. Dropped somewhere between the hostel and the sports complex.', 'Vehicles & Cycles', 'Hostel Complex', P.kabir, 70],
-  // Already returned — the success stories.
-  ['demo-lf-wallet',       'lost',  'Black Leather Wallet', 'Black Woodland wallet with college ID and some cash. Lost near the mess.', 'Accessories', 'Central Mess & Canteen', P.rahul, 96, 'resolved'],
-  ['demo-lf-airpods',      'found', 'AirPods Pro Case', 'White AirPods Pro case found in the Innovation Lab.', 'Electronics', 'Innovation & Computer Lab', P.meera, 120, 'resolved'],
+  // Singles — background students.
+  ['demo-lf-idcard',       'found', 'Campus ID Card near Mess Counter',   'Student ID in a clear lanyard found by the mess billing counter. CS 2nd year from the name on the card.', 'ID & Cards',        'Central Mess & Canteen',    P.kabir,  8],
+  ['demo-lf-bracelet',     'lost',  'Silver Bracelet with Star Charm',    'Thin silver chain bracelet with a small star charm. Lost near the basketball court in the evening.',          'Accessories',       'Sports Complex',            P.ananya, 40],
+  ['demo-lf-hoodie',       'lost',  'Navy Decathlon Hoodie Size M',       'Navy blue Decathlon hoodie left on a hostel common-room chair. Name tag on the inner collar.',              'Clothing & Gear',   'Hostel Complex',            P.rahul,  52],
+  ['demo-lf-specs',        'found', 'Black-Framed Spectacles in Case',    'Black-framed glasses in a brown Titan hard case, found on a bench in LH-101 after the OS lecture.',        'Accessories',       'Lecture Halls (LH)',        P.ananya, 12],
+  ['demo-lf-cyclekey',     'lost',  'Cycle Lock Key with Red Tag',        'Small key on a red plastic tag for a Hero cycle lock. Dropped between hostel and sports complex.',          'Vehicles & Cycles', 'Hostel Complex',            P.kabir,  70],
+  ['demo-lf-notebook',     'lost',  'Blue Spiral Lab Record Notebook',    'Blue spiral-bound lab record for Networks lab, name written inside front cover. Lost in LH-101.',           'Books & Notes',     'Lecture Halls (LH)',        P.gowtham,16],
+  ['demo-lf-notebook-fnd', 'found', 'Blue Spiral Notebook Found in LH-101','Found a blue spiral lab record notebook on a desk in LH-101 after the afternoon session.',                'Books & Notes',     'Lecture Halls (LH)',        P.mishal,  14],
+  ['demo-lf-umbrella',     'lost',  'Black Compact Umbrella',             'Small folding black umbrella with a broken tip on one spoke. Left in the mess during the heavy rain.',      'Accessories',       'Central Mess & Canteen',    P.rishabh, 6],
+  ['demo-lf-pen-drive',    'lost',  'SanDisk 32GB USB Drive',             'White SanDisk pendrive with a red cap. Had lab assignment submissions on it. Lost near Innovation Lab.',    'Electronics',       'Innovation & Computer Lab',  P.puja,   22],
+  ['demo-lf-lunchbox',     'found', 'Steel Tiffin Box near Mess',         'A two-layer steel tiffin box left at a mess table after lunch. Handle has a green rubber grip.',           'Accessories',       'Central Mess & Canteen',    P.noel,    3],
+  // Already returned — success stories.
+  ['demo-lf-wallet',       'lost',  'Black Leather Wallet',               'Black Woodland wallet with college ID and some cash inside. Lost near the mess billing counter.',           'Accessories',       'Central Mess & Canteen',    P.rahul,  96, 'resolved'],
+  ['demo-lf-airpods',      'found', 'AirPods Pro Case',                   'White AirPods Pro charging case found plugged in at the Innovation Lab. No earbuds inside.',               'Electronics',       'Innovation & Computer Lab',  P.meera, 120, 'resolved'],
 ];
 for (const [id, type, title, description, category, zone, who, hours, status = 'open'] of reports) {
   await db.doc(`lostFoundItems/${id}`).set({
@@ -224,6 +234,11 @@ const listings = [
   ['demo-ls-fridge',    'Mini Fridge for Rent', '45L mini fridge, rent per month. Perfect for a hostel room.', 'Electronics', 300, 'rent', 'Used - Works Fine', 'Hostel Complex', P.rahul, 48],
   ['demo-ls-dsnotes',   'Data Structures Handwritten Notes', 'Complete DSA notes with solved previous-year questions.', 'Books & Notes', 100, 'sale', 'Good Condition', 'Central Library', P.riya, 60],
   ['demo-ls-racket',    'Yonex Badminton Racket', 'Yonex Muscle Power 29, with cover. Grip replaced last month.', 'Clothing & Gear', 900, 'sale', 'Good Condition', 'Sports Complex', P.kabir, 75],
+  ['demo-ls-headphones','Sony WH-CH520 Wireless Headphones', 'Bought 6 months ago, barely used. Original box and cable included.', 'Electronics', 2400, 'sale', 'Like New', 'Innovation & Computer Lab', P.gowtham, 20],
+  ['demo-ls-clrs',      'CLRS Algorithms Textbook (3rd ed.)', 'Spine intact, light pencil notes in first 3 chapters only. Done with the course.', 'Books & Notes', 420, 'sale', 'Good Condition', 'Central Library', P.mishal, 36],
+  ['demo-ls-mattress',  'Single Bed Mattress — Giveaway', '4-inch foam mattress, no stains. Moving out of hostel, please collect.', 'Clothing & Gear', 0, 'free', 'Used - Works Fine', 'Hostel Complex', P.rishabh, 55],
+  ['demo-ls-cycle2',    'BSA Mach City Bicycle', 'Single-speed city bike, working brakes, basket attached. Good for campus runs.', 'Vehicles & Cycles', 1800, 'sale', 'Used - Works Fine', 'Hostel Complex', P.puja, 44],
+  ['demo-ls-keyboard',  'Mechanical Keyboard — TKL Layout', 'Red switches, white backlight, USB-C. Used for one semester of competitive programming.', 'Electronics', 1500, 'sale', 'Good Condition', 'Innovation & Computer Lab', P.noel, 30],
   // Sold to Riya, both sides confirmed, review not left yet: Riya can "Rate seller".
   ['demo-ls-arduino',   'Arduino Uno Starter Kit', 'Uno R3 with breadboard, jumper wires, sensors and a servo.', 'Electronics', 800, 'sale', 'Like New', 'Innovation & Computer Lab', P.meera, 100,
     { status: 'sold', soldAt: ago(70), reviewUnlocked: true, buyerUid: P.riya.uid, confirmations: { buyer: true, seller: true },
@@ -311,7 +326,7 @@ const ZONES = [
 for (const [id, name, adjacent] of ZONES) await db.doc(`campusZones/${id}`).set({ name, adjacent });
 
 console.log(`Seeded ${PROJECT}${removed ? ` (deleted ${removed} ${WIPE_ALL ? '' : 'old demo '}docs first)` : ''}:`);
-console.log(`  ${reports.length} lost & found reports (3 matching pairs, 2 returned), 3 claims`);
+console.log(`  ${reports.length} lost & found reports (4 matching pairs, 2 returned), 3 claims`);
 console.log(`  ${listings.length} marketplace listings (1 open offer, 1 sold, 1 flagged)`);
 console.log(`  1 chat thread, ${notes.length} notifications, 1 open flag, ${ZONES.length} campus zones`);
-console.log(`  ${Object.keys(BG).length} background students + the 3 demo accounts' profiles`);
+console.log(`  ${Object.keys(BG).length} background students (CSE311 classmates) + 3 demo accounts`);
