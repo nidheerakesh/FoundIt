@@ -51,6 +51,7 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState('All Categories');
   const [searchQuery, setSearchQuery] = useState('');
   const [isPostOpen, setIsPostOpen] = useState(false);
+  const [postType, setPostType] = useState('lost');
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isAIOpen, setIsAIOpen] = useState(false);
   const [activeItem, setActiveItem] = useState(null);
@@ -90,6 +91,7 @@ export default function App() {
   const openPost = () => {
     if (!isAuthed) { showToast('Sign in with your campus account to post.'); setIsAuthOpen(true); return; }
     if (!isVerified) { showToast('Verify your email before posting.'); return; }
+    setPostType(activeTab === 'marketplace' ? 'marketplace' : 'lost');
     setIsPostOpen(true);
   };
 
@@ -151,9 +153,12 @@ export default function App() {
         verified: !!user?.emailVerified,
         trustScore: 50,
       };
-      if (form.type === 'marketplace') await addListing(form, activePoster);
+      const isListing = form.type === 'marketplace';
+      if (isListing) await addListing(form, activePoster);
       else await addLostFound(form, activePoster);
-      showToast(`Posted "${form.title}" to the campus feed.`);
+      showToast(`Posted "${form.title}" to ${isListing ? 'the Marketplace' : 'Lost & Found'}.`);
+      // Don't let a new post vanish behind the other tab's filter.
+      if (activeTab === (isListing ? 'lost_found' : 'marketplace')) setActiveTab(isListing ? 'marketplace' : 'lost_found');
     } catch (err) {
       showToast(`Could not post — ${err.code || err.message}`);
     }
@@ -318,7 +323,7 @@ export default function App() {
         )}
       </main>
 
-      <PostModal isOpen={isPostOpen} onClose={() => setIsPostOpen(false)} onSubmit={addItem} />
+      <PostModal isOpen={isPostOpen} initialType={postType} onClose={() => setIsPostOpen(false)} onSubmit={addItem} />
       <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} />
       <ProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
       <ModerationPanel isOpen={isModerationOpen} onClose={() => setIsModerationOpen(false)} onToast={showToast} />

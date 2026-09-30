@@ -1,6 +1,6 @@
 # FoundIt — How the system is tested
 
-Five suites. Three run without any cloud project; two drive a real browser.
+Six suites. Three run without any cloud project; two drive a real browser.
 Nothing here talks to the live Firebase project.
 
 | Suite | Tests | What it proves | Needs |
@@ -9,7 +9,8 @@ Nothing here talks to the live Firebase project.
 | Integration — Cloud Functions | 28 | Every trigger and callable, against real Firestore | Firestore emulator |
 | Security rules | 56 | Every collection, from the client's side | Firestore emulator |
 | Frontend smoke | 16 | The signed-out app in a real browser on live data | emulator + dev server |
-| User journeys | ~40 checks | Three signed-in demo users driving every flow | Firestore + Auth emulators |
+| User journeys | 58 checks | Three signed-in demo users driving every flow | Firestore + Auth emulators |
+| Demo data | 18 checks | Every story the demo seed sets up can be played | Firestore + Auth emulators |
 
 ## 1. Unit tests — no emulator
 
@@ -121,17 +122,33 @@ The sign-in modal then lists the three accounts. The project id must be
 `foundit-demo` everywhere — it is what `web/src/lib/firebase.js` defaults to, and
 accounts created under any other id are invisible to the app.
 
-Journeys exercised: posting a report; the lost → found workflow in **both**
+Journeys exercised: posting every type from every entry point — a sale posted
+from the Marketplace tab, a sale picked from the All tab, a found report — and
+checking each lands in its own feed and nowhere else; the lost → found workflow in **both**
 directions (a finder answering a Lost post, and an owner claiming a Found post)
 — the "Review claims (N)" count, reading the proof, chat, *Approve & mark
 returned*, the Returned state for everyone, and the claimant's My claims view;
 the full marketplace handshake (offer → buyer confirms → seller confirms → sold
-→ buyer rates the seller, once); flagging and the moderator queue; and no
-uncaught page errors in any session.
+→ buyer rates the seller, once); flagging and the moderator queue; search, AI search, Smart Match, profile
+editing, the notification bell, sign-out and sign-back-in; and no uncaught page
+errors in any session.
 
 **Never build a real deployment with `VITE_DEMO_AUTH` set.** The password is not
 committed, but every `VITE_` variable is baked into the built JavaScript, so a
 demo build exposes it to anyone who opens the page.
+
+## 6. Demo data
+
+`scripts/seed-demo-data.mjs` fills the database for a demo (docs/DEMO-SETUP.md).
+This suite checks that each seeded story can actually be played as the demo
+accounts: the pending claim, the chat history, the matching pairs, the open
+offer, rating a completed purchase, notifications and the moderation queue.
+
+```bash
+# emulators and demo users as in §5
+node scripts/seed-demo-data.mjs
+node web/test/demo-data.mjs
+```
 
 ## Not covered
 

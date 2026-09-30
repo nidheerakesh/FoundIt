@@ -19,6 +19,10 @@ which version you are running and delete the other branch from your notes.
 
 ## 0. Pre-flight (do this 30 minutes before, not in the room)
 
+First time only: follow docs/DEMO-SETUP.md to deploy the rules, create the demo
+accounts and seed the data. Re-run `node scripts/seed-demo-data.mjs --project
+foundit-fcfcc` before each run to reset the demo.
+
 - [ ] All four devices signed out, popups allowed for the site on every one
       (Chrome blocks the Google window by default — this is the single most
       likely thing to break the demo)
