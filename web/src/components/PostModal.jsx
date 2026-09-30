@@ -22,17 +22,33 @@ const EMPTY = {
   condition: 'Good Condition',
 };
 
-export default function PostModal({ isOpen, onClose, onSubmit, initialType = 'lost' }) {
+export default function PostModal({ isOpen, onClose, onSubmit, initialType = 'lost', editItem = null }) {
   const [form, setForm] = useState(EMPTY);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiNote, setAiNote] = useState('');
   const [posting, setPosting] = useState(false);
+  const isEdit = !!editItem;
   // Open on the type that fits where the user is: from the Marketplace tab a
   // post is a listing. Defaulting to "Lost item" everywhere sent sales that
-  // skipped the type chips into Lost & Found.
+  // skipped the type chips into Lost & Found. Editing loads the post instead.
   useEffect(() => {
-    if (isOpen) setForm((f) => ({ ...f, type: initialType }));
-  }, [isOpen, initialType]);
+    if (!isOpen) return;
+    if (editItem) {
+      setForm({
+        type: editItem.type,
+        title: editItem.title || '',
+        category: editItem.category || 'Electronics',
+        location: editItem.location || 'Central Library',
+        description: editItem.description || '',
+        price: editItem.price ?? '',
+        listingType: editItem.listingType || 'Sell',
+        condition: editItem.condition || 'Good Condition',
+      });
+    } else {
+      setForm({ ...EMPTY, type: initialType });
+    }
+    setAiNote('');
+  }, [isOpen, initialType, editItem]);
   if (!isOpen) return null;
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -103,27 +119,33 @@ export default function PostModal({ isOpen, onClose, onSubmit, initialType = 'lo
         style={{ width: 'min(560px, 100%)', maxHeight: '90vh', overflowY: 'auto', padding: 24 }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-          <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 800 }}>Post to campus</h2>
+          <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 800 }}>{isEdit ? 'Edit your post' : 'Post to campus'}</h2>
           <button type="button" onClick={onClose} className="btn btn-ghost btn-sm btn-icon" aria-label="Close">
             <X size={16} />
           </button>
         </div>
         <p style={{ fontSize: 'var(--text-sm)', color: 'var(--ink-muted)', marginBottom: 18 }}>
-          Posts go to your verified campus feed only.
+          {isEdit
+            ? 'Changes appear for everyone straight away.'
+            : 'Posts go to your verified campus feed only.'}
         </p>
 
-        {/* Type selector */}
+        {/* Type selector. Locked while editing: lost/found and marketplace are
+            separate collections, so switching would mean delete-and-recreate,
+            losing the post's claims, offers and id. */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap' }}>
           {TYPES.map((t) => {
             const active = form.type === t.key;
+            if (isEdit && !active) return null;
             return (
               <button
                 key={t.key}
                 type="button"
-                onClick={() => setForm((f) => ({ ...f, type: t.key }))}
+                onClick={() => !isEdit && setForm((f) => ({ ...f, type: t.key }))}
                 className={`badge ${active ? t.cls : 'badge-neutral'}`}
-                style={{ cursor: 'pointer', padding: '7px 14px', fontSize: 'var(--text-sm)' }}
+                style={{ cursor: isEdit ? 'default' : 'pointer', padding: '7px 14px', fontSize: 'var(--text-sm)' }}
                 aria-pressed={active}
+                disabled={isEdit}
               >
                 {t.label}
               </button>
@@ -170,13 +192,18 @@ export default function PostModal({ isOpen, onClose, onSubmit, initialType = 'lo
               ))}
             </select>
           </Field>
-          <Field label="Location" style={{ flex: 1, minWidth: 160 }}>
-            <select className="input" value={form.location} onChange={set('location')}>
-              {CAMPUS_LOCATIONS.filter((l) => l !== 'All Campus Locations').map((l) => (
-                <option key={l} value={l} style={{ background: 'var(--surface)' }}>{l}</option>
-              ))}
-            </select>
-          </Field>
+          {/* Lost & found only. For a listing the location that matters is
+              where you agree to meet, which is settled per offer, not a
+              property of the item. */}
+          {!isMarket && (
+            <Field label="Location" style={{ flex: 1, minWidth: 160 }}>
+              <select className="input" value={form.location} onChange={set('location')}>
+                {CAMPUS_LOCATIONS.filter((l) => l !== 'All Campus Locations').map((l) => (
+                  <option key={l} value={l} style={{ background: 'var(--surface)' }}>{l}</option>
+                ))}
+              </select>
+            </Field>
+          )}
         </div>
 
         {isMarket && (
@@ -222,11 +249,14 @@ export default function PostModal({ isOpen, onClose, onSubmit, initialType = 'lo
           />
         </Field>
 
-        <p style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-muted)', margin: '4px 0 0' }}>
-          This goes to the <strong>{typeInfo.dest}</strong> feed as a <strong>{typeInfo.label}</strong>.
-        </p>
+        {!isEdit && (
+          <p style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-muted)', margin: '4px 0 0' }}>
+            This goes to the <strong>{typeInfo.dest}</strong> feed as a <strong>{typeInfo.label}</strong>.
+          </p>
+        )}
         <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} disabled={!valid || posting}>
-          <PlusCircle size={16} /> {posting ? 'Posting…' : typeInfo.submit}
+          <PlusCircle size={16} />
+          {posting ? (isEdit ? 'Saving…' : 'Posting…') : isEdit ? 'Save changes' : typeInfo.submit}
         </button>
       </form>
     </div>

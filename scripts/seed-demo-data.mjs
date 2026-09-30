@@ -235,9 +235,28 @@ const PRICE = { sale: 'sale', free: 'free', rent: 'rent' };
 for (const [id, title, description, category, price, priceType, condition, location, who, hours, extra = {}] of listings) {
   await db.doc(`listings/${id}`).set({
     title, description, category, keywords: kw(title, description),
-    condition, priceType: PRICE[priceType], price, location, imageURLs: [],
+    // Listings carry no location: where you meet is agreed per offer.
+    condition, priceType: PRICE[priceType], price, location: '', imageURLs: [],
     status: 'active', ...seller(who), createdAt: ago(hours),
     ...extra,
+  });
+}
+
+// ── Offers ──────────────────────────────────────────────────────────────────
+// Offers live in a subcollection so several buyers can bid without burying one
+// another; `lastOffer` on the listing is the one the seller accepted.
+//   - the cycle already has an accepted offer, so its handshake is ready to run
+//   - the DSA notes have two competing offers and none accepted, so the seller
+//     has a real choice to demonstrate
+const offers = [
+  ['demo-ls-cycle',   P.riya,  3000, 'Hostel Complex gate',  'Can pick it up this evening.', 4],
+  ['demo-ls-dsnotes', P.arjun,   90, 'Central Library',      'Can collect today after class.', 5],
+  ['demo-ls-dsnotes', P.kabir,  110, 'Academic Hub Canteen', 'Happy to pay a bit more if you can hold it for me.', 2],
+];
+for (const [listingId, who, price, meetupSpot, message, hours] of offers) {
+  await db.doc(`listings/${listingId}/offers/${who.uid}`).set({
+    buyerUid: who.uid, buyerName: who.name, buyerDept: who.dept, buyerVerified: true,
+    price, meetupSpot, message, createdAt: ago(hours),
   });
 }
 

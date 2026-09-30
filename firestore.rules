@@ -147,12 +147,14 @@ service cloud.firestore {
         // The seller edits their own listing's content. Never the handshake.
         || (isSeller() && changedOnly(['title', 'description', 'price', 'priceType',
                                    'condition', 'category', 'location', 'keywords', 'imageURLs']))
-        // A buyer places an offer — only lastOffer, only in their own name, and
-        // never over a buyer who has already confirmed (that would let a second
-        // buyer inherit the first one's confirmation).
-        || (signedIn() && !isSeller() && changedOnly(['lastOffer'])
-            && request.resource.data.lastOffer.buyerUid == request.auth.uid
-            && stored().get('buyer', false) == false)
+        // The seller accepts one of the offers. `lastOffer` is the accepted
+        // deal, not merely the most recent one — buyers write to the offers
+        // subcollection, so a second bidder can no longer overwrite the first.
+        // The accepted buyer must really have made an offer, and nothing may
+        // be accepted over a buyer who has already confirmed.
+        || (isSeller() && changedOnly(['lastOffer'])
+            && stored().get('buyer', false) == false
+            && exists(/databases/$(database)/documents/listings/$(listingId)/offers/$(request.resource.data.lastOffer.buyerUid)))
         // Handshake, for deployments without the confirmTransaction function.
         // Each party records ONLY THEIR OWN confirmation…
         || (isSeller() && changedOnly(['confirmations'])
@@ -169,6 +171,26 @@ service cloud.firestore {
             && request.resource.data.status == 'sold'
             && request.resource.data.reviewUnlocked == true);
       allow delete: if isMod() || (signedIn() && resource.data.sellerUid == request.auth.uid);
+
+      // Offers. One per buyer — the doc id is their uid, so a second offer is
+      // an update of their own, not a new row, and no buyer can bury another's.
+      // The seller reads them all and promotes one to `lastOffer`.
+      match /offers/{buyerId} {
+        function listing() { return get(/databases/$(database)/documents/listings/$(listingId)).data; }
+        // Offers are competitive: a rival reading them could undercut by a
+        // rupee. Only the seller judging them, the buyer who wrote it, and
+        // moderators may.
+        allow read: if isMod()
+          || (signedIn() && listing().sellerUid == request.auth.uid)
+          || (signedIn() && buyerId == request.auth.uid);
+        allow create, update: if isVerified()
+          && buyerId == request.auth.uid
+          && request.resource.data.buyerUid == request.auth.uid
+          && listing().sellerUid != request.auth.uid
+          && listing().status == 'active';
+        // Buyers may withdraw before the seller accepts.
+        allow delete: if signedIn() && buyerId == request.auth.uid;
+      }
     }
 
     // Chats — participants only.

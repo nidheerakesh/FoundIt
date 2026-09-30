@@ -15,9 +15,10 @@ import FlagModal from './components/FlagModal';
 import AIAssistantModal from './components/AIAssistantModal';
 import ProfileModal from './components/ProfileModal';
 import ModerationPanel from './components/ModerationPanel';
+import OffersModal from './components/OffersModal';
 import HowItWorks from './components/HowItWorks';
 import { useFeed } from './hooks/useFeed';
-import { addLostFound, addListing } from './lib/feed';
+import { addLostFound, addListing, updateLostFound, updateListing, getItemDetail } from './lib/feed';
 import { subscribeMyClaims } from './lib/claims';
 import { findMatchesForItem } from './lib/matching';
 import { useAuth } from './auth/AuthContext';
@@ -66,6 +67,7 @@ export default function App() {
   const [isFlagOpen, setIsFlagOpen] = useState(false);
   const [isSmartMatchOpen, setIsSmartMatchOpen] = useState(false);
   const [isClaimsReviewOpen, setIsClaimsReviewOpen] = useState(false);
+  const [isOffersOpen, setIsOffersOpen] = useState(false);
   const [isMyClaimsOpen, setIsMyClaimsOpen] = useState(false);
   // itemId → status of the signed-in user's claim on it, so a card you have
   // already claimed says so instead of inviting a duplicate claim.
@@ -124,6 +126,11 @@ export default function App() {
     setIsClaimOpen(true);
   };
 
+  const handleOpenOffers = (target) => {
+    setActiveItem(target);
+    setIsOffersOpen(true);
+  };
+
   const handleOpenClaimsReview = (target) => {
     setActiveItem(target);
     setIsClaimsReviewOpen(true);
@@ -167,6 +174,33 @@ export default function App() {
     setActiveItem(target);
     setActiveMatchResult(best);
     setIsSmartMatchOpen(true);
+  };
+
+  // Editing reuses the post form. A lost/found description is private, so it
+  // has to be fetched before the form can show it — otherwise saving would
+  // blank it out.
+  const [editItem, setEditItem] = useState(null);
+  const handleOpenEdit = async (target) => {
+    if (!isAuthed) { showToast('Sign in to edit your post.'); setIsAuthOpen(true); return; }
+    const detail = target.type === 'marketplace'
+      ? target.description
+      : target.description || (target.hasDetail ? await getItemDetail(target.id) : '');
+    setEditItem({ ...target, description: detail || '' });
+    setIsPostOpen(true);
+  };
+
+  const submitPost = async (form) => {
+    if (!editItem) return addItem(form);
+    try {
+      if (editItem.type === 'marketplace') await updateListing(editItem.id, form);
+      else await updateLostFound(editItem.id, form);
+      showToast(`Updated "${form.title}".`);
+    } catch (err) {
+      showToast(`Could not save — ${err.code || err.message}`);
+    } finally {
+      setEditItem(null);
+    }
+    return undefined;
   };
 
   const addItem = async (form) => {
@@ -353,6 +387,8 @@ export default function App() {
                 onChat={handleOpenChat}
                 onHandshake={handleOpenHandshake}
                 onFlag={handleOpenFlag}
+                onEdit={handleOpenEdit}
+                onReviewOffers={handleOpenOffers}
                 onSmartMatch={handleOpenSmartMatch}
               />
             ))}
@@ -360,10 +396,24 @@ export default function App() {
         )}
       </main>
 
-      <PostModal isOpen={isPostOpen} initialType={postType} onClose={() => setIsPostOpen(false)} onSubmit={addItem} />
+      <PostModal
+        isOpen={isPostOpen}
+        initialType={postType}
+        editItem={editItem}
+        onClose={() => { setIsPostOpen(false); setEditItem(null); }}
+        onSubmit={submitPost}
+      />
       <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} />
       <ProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
       <ModerationPanel isOpen={isModerationOpen} onClose={() => setIsModerationOpen(false)} onToast={showToast} />
+
+      <OffersModal
+        isOpen={isOffersOpen}
+        onClose={() => setIsOffersOpen(false)}
+        listing={items.find((i) => i.id === activeItem?.id) || activeItem}
+        onToast={showToast}
+        onOpenChat={(it, who) => handleOpenChat(it, who)}
+      />
 
       <ClaimModal
         isOpen={isClaimOpen}

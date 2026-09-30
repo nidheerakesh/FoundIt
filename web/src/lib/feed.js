@@ -6,7 +6,7 @@
 // standard Firestore feed pattern. The authoritative trust value still lives on the
 // user doc and is recomputed server-side (docs/SCORING.md).
 import {
-  collection, doc, addDoc, setDoc, getDoc, onSnapshot, query, orderBy, serverTimestamp,
+  collection, doc, addDoc, setDoc, getDoc, updateDoc, onSnapshot, query, orderBy, serverTimestamp,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { COL } from '../types';
@@ -73,7 +73,9 @@ function listingToCard(id, d) {
     type: 'marketplace',
     title: d.title,
     category: d.category,
-    location: d.location || 'Campus',
+    // Listings have no location of their own — the handover spot is agreed per
+    // offer. Empty, so the card omits the line rather than inventing "Campus".
+    location: d.location || '',
     date: timeAgo(createdMs(d)),
     description: d.description,
     reporter: d.sellerName || 'Student',
@@ -240,6 +242,49 @@ export async function addLostFound(form, poster) {
   return ref;
 }
 
+/**
+ * Edit a lost/found report you posted. Only the fields the poster owns: status,
+ * matchScore, matchedWith and flagCount are server-owned and the rules reject
+ * any write that changes them.
+ */
+export async function updateLostFound(itemId, form) {
+  if (!itemId) throw new Error('Item ID is required.');
+  const description = form.description?.trim() || '';
+  await updateDoc(doc(db, COL.lostFoundItems, itemId), {
+    title: form.title,
+    category: form.category,
+    // Retitling changes what the item matches on, so tags are rebuilt.
+    keywords: derivePublicTags(form.title, description),
+    hasDetail: !!description,
+    zoneId: form.location,
+    location: form.location,
+  });
+  // Stays out of the card — see addLostFound.
+  await setDoc(
+    doc(db, COL.lostFoundItems, itemId, 'private', 'detail'),
+    { description, updatedAt: serverTimestamp() },
+    { merge: true }
+  );
+}
+
+/**
+ * Edit a listing you posted. Restricted to the content fields the rules allow a
+ * seller to touch — the handshake (`confirmations`, `lastOffer`, `status`) is
+ * never editable, or a seller could rewrite a deal after the fact.
+ */
+export async function updateListing(listingId, form) {
+  if (!listingId) throw new Error('Listing ID is required.');
+  await updateDoc(doc(db, COL.listings, listingId), {
+    title: form.title,
+    description: form.description,
+    category: form.category,
+    keywords: deriveKeywords(form.title, form.description),
+    condition: form.condition || 'Good Condition',
+    priceType: LISTING_TO_PRICE[form.listingType] || 'sale',
+    price: form.listingType === 'Giveaway' ? 0 : Number(form.price) || 0,
+  });
+}
+
 /** Write a marketplace listing. */
 export async function addListing(form, poster) {
   const who = posterFields(poster);
@@ -251,7 +296,9 @@ export async function addListing(form, poster) {
     condition: form.condition || 'Good Condition',
     priceType: LISTING_TO_PRICE[form.listingType] || 'sale',
     price: form.listingType === 'Giveaway' ? 0 : Number(form.price) || 0,
-    location: form.location,
+    // Listings carry no location: where you actually meet is agreed per offer
+    // (`meetupSpot`), not fixed to the item.
+    location: '',
     imageURLs: [],
     status: 'active',
     sellerUid: who.uid,

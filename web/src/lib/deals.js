@@ -1,21 +1,63 @@
-import { doc, setDoc, updateDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import {
+  collection, doc, setDoc, updateDoc, getDoc, onSnapshot, query, orderBy, serverTimestamp,
+} from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './firebase';
 import { COL } from '../types';
 
-/** Submit a marketplace deal offer — records the buyer's offer on the listing. */
+/**
+ * Place an offer on a listing.
+ *
+ * Offers live in a subcollection keyed by the buyer's uid. They used to be a
+ * single `lastOffer` field on the listing, so a second bidder silently
+ * overwrote the first and the seller never saw them — and could not choose.
+ * `lastOffer` now means "the offer the seller accepted", written by the seller
+ * alone (see acceptOffer and the rules).
+ */
 export async function makeDealOffer(listingId, { offerPrice, meetupSpot, message }, buyer) {
   if (!listingId) throw new Error('Listing ID required.');
   if (!buyer?.uid) throw new Error('Sign in to propose a deal.');
 
-  const listingRef = doc(db, COL.listings, listingId);
-  await updateDoc(listingRef, {
+  await setDoc(doc(db, COL.listings, listingId, 'offers', buyer.uid), {
+    buyerUid: buyer.uid,
+    buyerName: buyer.name || 'Student',
+    buyerDept: buyer.dept || '',
+    buyerVerified: !!buyer.verified,
+    price: Number(offerPrice) || 0,
+    meetupSpot: meetupSpot || 'Central Library',
+    message: message?.trim() || '',
+    createdAt: serverTimestamp(),
+  });
+}
+
+/** Live list of offers on a listing. Readable by the seller and each buyer. */
+export function subscribeOffers(listingId, cb, onError = () => {}) {
+  if (!listingId) return () => {};
+  return onSnapshot(
+    query(collection(db, COL.listings, listingId, 'offers'), orderBy('createdAt', 'desc')),
+    (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    (err) => {
+      // eslint-disable-next-line no-console
+      console.warn('[FoundIt] offers listen failed:', err.code || err.message);
+      onError(err);
+    }
+  );
+}
+
+/**
+ * Seller picks a winning offer. Promoting it to `lastOffer` is what starts the
+ * two-party handshake; the rules check the buyer really has an offer on file,
+ * so a seller cannot invent one.
+ */
+export async function acceptOffer(listingId, offer) {
+  if (!listingId || !offer?.buyerUid) throw new Error('Pick an offer to accept.');
+  await updateDoc(doc(db, COL.listings, listingId), {
     lastOffer: {
-      buyerUid: buyer.uid,
-      buyerName: buyer.name || 'Student',
-      price: offerPrice,
-      meetupSpot,
-      message,
+      buyerUid: offer.buyerUid,
+      buyerName: offer.buyerName || 'Student',
+      price: offer.price ?? 0,
+      meetupSpot: offer.meetupSpot || '',
+      message: offer.message || '',
       createdAt: Date.now(),
     },
   });

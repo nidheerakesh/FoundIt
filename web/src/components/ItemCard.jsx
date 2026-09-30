@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { MapPin, Clock, Sparkles, MessageCircle, Handshake, Flag, Package, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { MapPin, Clock, Sparkles, MessageCircle, Handshake, Flag, Package, ShieldCheck, CheckCircle2, Pencil } from 'lucide-react';
 import { subscribePendingCount } from '../lib/claims';
+import { subscribeOffers } from '../lib/deals';
 import { getItemDetail } from '../lib/feed';
 import TrustBadge from './TrustBadge';
 
@@ -12,7 +13,7 @@ const TYPE_BADGE = {
 
 const LISTING_LABEL = { Sell: 'Sell', Rent: 'For Rent', Giveaway: 'Free' };
 
-export default function ItemCard({ item, index = 0, currentUid = null, myClaim = null, onOpenMyClaims, onClaim, onChat, onHandshake, onFlag, onSmartMatch, onReviewClaims }) {
+export default function ItemCard({ item, index = 0, currentUid = null, myClaim = null, onOpenMyClaims, onClaim, onChat, onHandshake, onFlag, onEdit, onSmartMatch, onReviewClaims, onReviewOffers }) {
   const badge = TYPE_BADGE[item.type] ?? TYPE_BADGE.marketplace;
   const isMarket = item.type === 'marketplace';
   // Mock/demo cards carry no postedBy, so this is false for them — they stay claimable.
@@ -30,6 +31,14 @@ export default function ItemCard({ item, index = 0, currentUid = null, myClaim =
     if (!isOwn || isMarket || isReturned || item.pending) return undefined;
     return subscribePendingCount(item.id, setPending);
   }, [isOwn, isMarket, isReturned, item.pending, item.id]);
+
+  // How many buyers are waiting on your listing. Same idea as the claim count:
+  // the seller sees it on the card instead of being notified.
+  const [offerCount, setOfferCount] = useState(0);
+  useEffect(() => {
+    if (!isOwn || !isMarket || isSold || item.pending) return undefined;
+    return subscribeOffers(item.id, (rows) => setOfferCount(rows.length), () => setOfferCount(0));
+  }, [isOwn, isMarket, isSold, item.pending, item.id]);
 
   // Your own description lives in a private subdocument, so it takes a read.
   // Only fetch it for your own posts; for anyone else the rules would refuse.
@@ -123,9 +132,11 @@ export default function ItemCard({ item, index = 0, currentUid = null, myClaim =
 
       {/* Meta */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 'var(--text-xs)', color: 'var(--ink-muted)', marginBottom: 14 }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <MapPin size={13} /> {item.location}
-        </span>
+        {item.location && (
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <MapPin size={13} /> {item.location}
+          </span>
+        )}
         <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           <Clock size={13} /> {item.date}
           {item.condition && (
@@ -164,11 +175,23 @@ export default function ItemCard({ item, index = 0, currentUid = null, myClaim =
             <CheckCircle2 size={15} /> Returned to owner
           </button>
         ) : isMarket && isOwn ? (
-          // Your own listing: you confirm a buyer's offer, you do not make one.
-          <button className="btn btn-success btn-sm" style={{ flex: 1 }} disabled={!hasOffer}
-            onClick={() => onHandshake?.(item)}>
-            <Handshake size={15} /> {hasOffer ? 'Confirm sale' : 'No offers yet'}
-          </button>
+          // Your own listing: pick an offer, then confirm it. You never make one.
+          // Until an offer is accepted the choice is the action — a single
+          // "Confirm sale" would silently take whichever offer landed last.
+          hasOffer ? (
+            <button className="btn btn-success btn-sm" style={{ flex: 1 }} onClick={() => onHandshake?.(item)}>
+              <Handshake size={15} /> Confirm sale
+            </button>
+          ) : (
+            <button
+              className={`btn btn-sm ${offerCount ? 'btn-primary' : 'btn-ghost'}`}
+              style={{ flex: 1 }}
+              disabled={!offerCount}
+              onClick={() => onReviewOffers?.(item)}
+            >
+              <Handshake size={15} /> {offerCount ? `Review offers (${offerCount})` : 'No offers yet'}
+            </button>
+          )
         ) : isMarket ? (
           <button className="btn btn-success btn-sm" style={{ flex: 1 }} onClick={() => onHandshake?.(item)}>
             <Handshake size={15} /> Make a deal
@@ -190,12 +213,21 @@ export default function ItemCard({ item, index = 0, currentUid = null, myClaim =
             {item.type === 'found' ? 'Claim this' : 'I found it'}
           </button>
         )}
+        {/* Your own post: edit it. Once it is sold or returned the record is
+            closed, so the content stops being editable. */}
+        {isOwn && !isSold && !isReturned && (
+          <button className="btn btn-ghost btn-sm btn-icon" onClick={() => onEdit?.(item)} title="Edit post" aria-label="Edit post">
+            <Pencil size={15} />
+          </button>
+        )}
         <button className="btn btn-ghost btn-sm btn-icon" onClick={() => onChat?.(item)} title="Message" aria-label="Message">
           <MessageCircle size={15} />
         </button>
-        <button className="btn btn-ghost btn-sm btn-icon" onClick={() => onFlag?.(item)} title="Flag for review" aria-label="Flag for review">
-          <Flag size={15} />
-        </button>
+        {!isOwn && (
+          <button className="btn btn-ghost btn-sm btn-icon" onClick={() => onFlag?.(item)} title="Flag for review" aria-label="Flag for review">
+            <Flag size={15} />
+          </button>
+        )}
       </div>
     </article>
   );
