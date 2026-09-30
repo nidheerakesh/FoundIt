@@ -33,8 +33,31 @@ export default function ChatModal({
     setLoading(true);
     setError('');
 
-    const targetUid = target?.uid || item.postedBy || item.sellerUid || 'poster-uid';
-    const targetName = target?.name || item.reporter || item.sellerName || 'Student';
+    // The other party is normally whoever posted. But on your OWN post that
+    // resolves to yourself — a seller opening the chat on their own listing got
+    // "You cannot chat with yourself" instead of reaching their buyer. When you
+    // are the poster, the counterparty is whoever made the offer.
+    const ownerUid = item.postedBy || item.sellerUid || null;
+    const iAmPoster = !!ownerUid && ownerUid === currentUser.uid;
+
+    const targetUid = target?.uid
+      || (iAmPoster ? item.lastOffer?.buyerUid : ownerUid)
+      || null;
+    const targetName = target?.name
+      || (iAmPoster ? item.lastOffer?.buyerName : (item.reporter || item.sellerName))
+      || 'Student';
+
+    // Your own post with nobody on the other side yet: say so plainly rather
+    // than failing inside getOrCreateChat with a self-chat error.
+    if (!targetUid) {
+      setLoading(false);
+      setError(
+        iAmPoster
+          ? 'Nobody has contacted you about this post yet. Their message will open the chat.'
+          : 'This post has no contactable owner.'
+      );
+      return undefined;
+    }
 
     getOrCreateChat({
       targetUid,
@@ -85,7 +108,13 @@ export default function ChatModal({
     }
   };
 
-  const otherName = target?.name || item.reporter || item.sellerName || 'Student';
+  // Same resolution as the thread above, so the header names the person you
+  // are actually talking to rather than yourself.
+  const headerOwnerUid = item?.postedBy || item?.sellerUid || null;
+  const headerIAmPoster = !!headerOwnerUid && headerOwnerUid === currentUser?.uid;
+  const otherName = target?.name
+    || (headerIAmPoster ? item?.lastOffer?.buyerName : (item?.reporter || item?.sellerName))
+    || 'Student';
 
   return (
     <div className="overlay" onClick={onClose} role="dialog" aria-modal="true" aria-label="Campus chat">
