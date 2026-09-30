@@ -5,13 +5,17 @@
 // exactly like a real verified student. Their users/{uid} profile is written
 // too, and one of them is given the moderator custom claim.
 //
+// The password comes from DEMO_PASSWORD and is never committed. Use the same
+// value for VITE_DEMO_PASSWORD in web/.env.local.
+//
 // Against the Auth emulator (no credentials needed):
-//   FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 \
+//   DEMO_PASSWORD=… FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 \
 //   FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 \
 //   node scripts/seed-demo-users.mjs
 //
 // Against the real project (needs a service account key):
 //   export GOOGLE_APPLICATION_CREDENTIALS=~/foundit-key.json
+//   export DEMO_PASSWORD=…
 //   node scripts/seed-demo-users.mjs --project foundit-fcfcc
 //
 // Email/password must be enabled as a sign-in provider in the Firebase console.
@@ -45,8 +49,12 @@ initializeApp(EMULATED ? { projectId: PROJECT } : { credential: applicationDefau
 const auth = getAuth();
 const db = getFirestore();
 
+const PASSWORD = process.env.DEMO_PASSWORD || '';
+if (PASSWORD.length < 8) {
+  console.error('Set DEMO_PASSWORD (8+ characters). It is never committed; reuse it as VITE_DEMO_PASSWORD.');
+  process.exit(1);
+}
 // Kept in step with web/src/auth/demoAccounts.js.
-const PASSWORD = 'demo-FoundIt-2026';
 const ACCOUNTS = [
   { email: 'riya.demo@iiitkottayam.ac.in',  name: 'Riya Singh', dept: 'CSE', role: 'student' },
   { email: 'arjun.demo@iiitkottayam.ac.in', name: 'Arjun Nair', dept: 'ECE', role: 'student' },
@@ -83,5 +91,5 @@ for (const a of ACCOUNTS) {
   console.log(`${a.email.padEnd(34)} ${user.uid}  (${a.role})`);
 }
 
-console.log(`\n${ACCOUNTS.length} demo accounts ready. Password: ${PASSWORD}`);
-console.log('Enable the UI with VITE_DEMO_AUTH=true in web/.env');
+console.log(`\n${ACCOUNTS.length} demo accounts ready.`);
+console.log('Enable the UI: VITE_DEMO_AUTH=true and VITE_DEMO_PASSWORD=<same value> in web/.env.local');
