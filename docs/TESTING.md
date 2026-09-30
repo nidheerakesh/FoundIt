@@ -7,9 +7,9 @@ Nothing here talks to the live Firebase project.
 |---|---|---|---|
 | Unit — pure logic | 13 | Match and trust formulas, match fan-out decisions | nothing |
 | Integration — Cloud Functions | 28 | Every trigger and callable, against real Firestore | Firestore emulator |
-| Security rules | 44 | Every collection, from the client's side | Firestore emulator |
+| Security rules | 56 | Every collection, from the client's side | Firestore emulator |
 | Frontend smoke | 16 | The signed-out app in a real browser on live data | emulator + dev server |
-| User journeys | ~30 checks | Three signed-in demo users driving every flow | Firestore + Auth emulators |
+| User journeys | ~40 checks | Three signed-in demo users driving every flow | Firestore + Auth emulators |
 
 ## 1. Unit tests — no emulator
 
@@ -109,10 +109,11 @@ curl -X PUT "http://127.0.0.1:8080/emulator/v1/projects/foundit-demo:securityRul
   --data "$(jq -n --rawfile r firestore.rules '{rules:{files:[{name:"firestore.rules",content:$r}]}}')"
 
 export FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
+export DEMO_PASSWORD='pick-one-8plus'   # never committed
 node scripts/seed-demo-users.mjs     # Riya, Arjun (students), Meera (moderator)
 node scripts/seed-emulator.mjs       # feed owned by those accounts
 
-echo 'VITE_DEMO_AUTH=true' > web/.env.local
+printf 'VITE_DEMO_AUTH=true\nVITE_DEMO_PASSWORD=%s\n' "$DEMO_PASSWORD" > web/.env.local
 npm --prefix web run dev
 ```
 
@@ -120,12 +121,17 @@ The sign-in modal then lists the three accounts. The project id must be
 `foundit-demo` everywhere — it is what `web/src/lib/firebase.js` defaults to, and
 accounts created under any other id are invisible to the app.
 
-Journeys exercised: posting a report; claiming it, chatting, and the owner
-reading the proof and approving; the full marketplace handshake (offer → buyer
-confirms → seller confirms → sold); flagging and the moderator queue.
+Journeys exercised: posting a report; the lost → found workflow in **both**
+directions (a finder answering a Lost post, and an owner claiming a Found post)
+— the "Review claims (N)" count, reading the proof, chat, *Approve & mark
+returned*, the Returned state for everyone, and the claimant's My claims view;
+the full marketplace handshake (offer → buyer confirms → seller confirms → sold
+→ buyer rates the seller, once); flagging and the moderator queue; and no
+uncaught page errors in any session.
 
-**Never set `VITE_DEMO_AUTH=true` on a real deployment.** The accounts' password
-is in the source.
+**Never build a real deployment with `VITE_DEMO_AUTH` set.** The password is not
+committed, but every `VITE_` variable is baked into the built JavaScript, so a
+demo build exposes it to anyone who opens the page.
 
 ## Not covered
 

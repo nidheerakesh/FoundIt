@@ -136,35 +136,47 @@ Nidhi lost the notebook, so Nidhi is the one who claims it back. Shenza posted
 the found report, so Shenza is the finder who approves. Keep those roles
 straight — a grader watching the wrong person approve their own claim will ask.
 
-1. **Nidhi** opens the *found* lab record Shenza posted, clicks **Claim**.
+1. **Nidhi** opens the *found* lab record Shenza posted, clicks **Claim this**.
 2. Answers the proof question — something only the real owner knows
    (`name written inside the front cover`) — picks a meeting spot, submits.
-3. **Shenza** opens the claim on her device.
+   The confirmation tells her to follow it under **My claims**.
+3. **Shenza** refreshes: her found card now reads **Review claims (1)**. She opens
+   it and reads Nidhi's proof.
 
-> "The finder never sees a claimant's answer until they've submitted their own —
-> that's the anti-fraud step. Approval is a two-party handshake, not a button
-> one person presses."
+> "No notification needed — the count is on the finder's own card the moment
+> they open the app. And the proof is private: security rules let only the
+> finder, the claimant and moderators read it, so nobody can copy the real
+> owner's answer and claim the item first."
 
-4. **[BLAZE]** Shenza approves → item flips to *resolved*, both parties get
-   notified, her `resolvedCount` increments and trust recomputes.
+4. Shenza taps **Message** to agree the handover, then **Approve & mark returned**.
+   The card flips to **Returned** for everyone and takes no more claims.
+5. **Nidhi** opens her account menu → **My claims**: *Approved — marked returned.*
 
-**Without Blaze:** the claim submits and is visible, but approval won't resolve
-the item. Stop after step 3 and describe the rest.
+> "Marking it returned is one atomic write: the claim approval and the item's
+> status land together or not at all, and the rules refuse to close an item
+> unless the claim it names really is approved."
+
+**Needs Blaze (Cloud Functions), describe rather than show:** the notification
+bell, Shenza's `resolvedCount` incrementing and both trust scores recomputing.
+Everything in steps 1–5 works without it.
 
 ---
 
-## 6. Marketplace deal (Hadi, 60s) **[BLAZE]**
+## 6. Marketplace deal (Hadi, 60s)
 
-1. **Hadi** opens the Trek bicycle listing, makes an offer.
-2. Seller and buyer each confirm.
-3. Listing flips to *sold*, review unlocks for both.
+1. **Hadi** opens the Trek bicycle listing, taps **Make a deal**, sends an offer,
+   then **Confirm deal** once they have met. His screen: *waiting for the seller*.
+2. **The seller** refreshes: their card now says **Confirm sale**, showing Hadi's
+   name and price. They confirm.
+3. The card reads **Sold** for everyone. Hadi taps **Rate seller** and leaves a review.
 
-> "Either side alone can't mark it sold. Both confirmations are recorded in a
-> Firestore transaction and only the function writes the final status — the Saga
-> pattern applied to a two-party exchange."
+> "Either side alone can't mark it sold. Each party can write only their own
+> confirmation — the rules reject a buyer setting the seller's — and the flip
+> to sold is only allowed once both are already stored. The Saga pattern, with
+> the security rules as the coordinator when Cloud Functions aren't deployed."
 
-**Without Blaze:** this throws. **Skip it entirely** — don't click confirm and
-hope. Describe the handshake over the listing screen instead.
+Works without Blaze. With Blaze, `confirmTransaction` runs instead and also
+recomputes the seller's trust.
 
 ---
 

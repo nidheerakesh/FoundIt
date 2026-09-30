@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { LogOut, User, UserCircle, ShieldAlert } from 'lucide-react';
+import { LogOut, User, UserCircle, ClipboardList, ShieldAlert } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { logout } from './authApi';
 import TrustBadge from '../components/TrustBadge';
 import NotificationBell from '../components/NotificationBell';
 
 // Navbar account control: "Sign in" when logged out; avatar + dropdown when in.
-export default function AccountMenu({ onLogin, onOpenProfile, onOpenModeration }) {
+export default function AccountMenu({ onLogin, onOpenProfile, onOpenModeration, onOpenMyClaims }) {
   const { isAuthed, profile, isMod, role } = useAuth();
   const [open, setOpen] = useState(false);
 
@@ -52,6 +52,9 @@ export default function AccountMenu({ onLogin, onOpenProfile, onOpenModeration }
             )}
             <button className="btn btn-ghost btn-sm" style={{ width: '100%', marginBottom: 6 }} onClick={() => { setOpen(false); onOpenProfile?.(); }}>
               <UserCircle size={14} /> My Profile
+            </button>
+            <button className="btn btn-ghost btn-sm" style={{ width: '100%', marginBottom: 6 }} onClick={() => { setOpen(false); onOpenMyClaims?.(); }}>
+              <ClipboardList size={14} /> My claims
             </button>
             {isMod && (
               <button

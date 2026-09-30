@@ -107,7 +107,9 @@ export default function DealModal({
       setStep('done');
       onDealSuccess?.(`Review saved for ${listing.reporter}.`);
     } catch (err) {
-      setError(err.message || 'Failed to record review.');
+      setError(err.code === 'permission-denied'
+        ? 'You have already reviewed this deal.'
+        : err.message || 'Failed to record review.');
     } finally {
       setBusy(false);
     }

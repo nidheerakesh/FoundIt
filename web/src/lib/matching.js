@@ -136,11 +136,13 @@ export function calculateMatchScore(itemA, itemB) {
 
 /** Top candidate matches for an item, best first. */
 export function findMatchesForItem(targetItem, allItems = []) {
-  if (!targetItem || targetItem.type === 'marketplace') return [];
+  if (!targetItem || targetItem.type === 'marketplace' || targetItem.status === 'resolved') return [];
   const targetOpposite = targetItem.type === 'lost' ? 'found' : 'lost';
 
   return allItems
-    .filter((candidate) => candidate.id !== targetItem.id && candidate.type === targetOpposite)
+    // A returned item is closed — it should not keep suggesting itself.
+    .filter((candidate) => candidate.id !== targetItem.id && candidate.type === targetOpposite
+      && candidate.status !== 'resolved')
     .map((candidate) => {
       const { score, factors, sharedTokens } = calculateMatchScore(targetItem, candidate);
       return { candidate, score, factors, sharedTokens };

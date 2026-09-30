@@ -16,7 +16,7 @@ import assert from 'node:assert';
 import {
   initializeTestEnvironment, assertFails, assertSucceeds,
 } from '@firebase/rules-unit-testing';
-import { doc, setDoc, updateDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, getDoc, getDocs, collection, collectionGroup, query, where, writeBatch } from 'firebase/firestore';
 
 const RULES = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'firestore.rules');
 
@@ -366,4 +366,110 @@ test('listings: nobody can place an offer in someone else’s name', async () =>
 test('listings: a second buyer cannot take over an offer the first buyer already confirmed', async () => {
   await seedOffer({ buyer: true });
   await assertFails(updateDoc(doc(verified('uid-stranger'), L1), { lastOffer: { buyerUid: 'uid-stranger', price: 999 } }));
+});
+
+// ===========================================================================
+// The lost → found workflow without Cloud Functions: approve & mark returned
+// ===========================================================================
+async function seedWorkflow(itemStatus = 'open') {
+  await env.clearFirestore();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, ITEM), { type: 'found', title: 'Blue bottle', postedBy: OWNER, status: itemStatus });
+    await setDoc(doc(db, CLAIM), { claimantUid: CLAIMANT, proof: 'dented lid', status: 'pending' });
+    await setDoc(doc(db, 'lostFoundItems/item-1/claims/claim-9'), { claimantUid: STRANGER, proof: 'guess', status: 'pending' });
+  });
+}
+const approveAndReturn = (fs, claimId = 'claim-1') => {
+  const b = writeBatch(fs);
+  b.update(doc(fs, `lostFoundItems/item-1/claims/${claimId}`), { status: 'approved' });
+  b.update(doc(fs, ITEM), { status: 'resolved', resolvedClaimId: claimId, resolvedAt: new Date() });
+  return b.commit();
+};
+
+test('workflow: the poster approves a claim and marks the item returned in one write', async () => {
+  await seedWorkflow();
+  await assertSucceeds(approveAndReturn(verified(OWNER)));
+});
+
+test('workflow: an item cannot be marked returned without an approved claim', async () => {
+  await seedWorkflow();
+  // naming a claim that is still pending
+  await assertFails(updateDoc(doc(verified(OWNER), ITEM), { status: 'resolved', resolvedClaimId: 'claim-1', resolvedAt: new Date() }));
+  // naming a claim that does not exist
+  await assertFails(updateDoc(doc(verified(OWNER), ITEM), { status: 'resolved', resolvedClaimId: 'nope', resolvedAt: new Date() }));
+});
+
+test('workflow: nobody but the poster can mark it returned', async () => {
+  await seedWorkflow();
+  await assertFails(approveAndReturn(verified(CLAIMANT)));
+  await assertFails(approveAndReturn(verified(STRANGER)));
+});
+
+test('workflow: marking returned cannot smuggle in other field changes', async () => {
+  await seedWorkflow();
+  const fs = verified(OWNER);
+  const b = writeBatch(fs);
+  b.update(doc(fs, CLAIM), { status: 'approved' });
+  b.update(doc(fs, ITEM), { status: 'resolved', resolvedClaimId: 'claim-1', resolvedAt: new Date(), matchScore: 100 });
+  await assertFails(b.commit());
+});
+
+test('workflow: a returned item takes no new claims', async () => {
+  await seedWorkflow('resolved');
+  await assertFails(setDoc(doc(verified('uid-late'), 'lostFoundItems/item-1/claims/late'),
+    { claimantUid: 'uid-late', proof: 'mine too', status: 'pending' }));
+});
+
+test('workflow: after return, a leftover claim can be declined but not approved', async () => {
+  await seedWorkflow();
+  await assertSucceeds(approveAndReturn(verified(OWNER)));
+  await assertFails(updateDoc(doc(verified(OWNER), 'lostFoundItems/item-1/claims/claim-9'), { status: 'approved' }));
+  await assertSucceeds(updateDoc(doc(verified(OWNER), 'lostFoundItems/item-1/claims/claim-9'), { status: 'rejected' }));
+});
+
+test('workflow: you cannot claim your own post', async () => {
+  await seedWorkflow();
+  await assertFails(setDoc(doc(verified(OWNER), 'lostFoundItems/item-1/claims/self'),
+    { claimantUid: OWNER, proof: 'x', status: 'pending' }));
+});
+
+// --- claim privacy ---------------------------------------------------------
+test('claims: proof is private — a stranger cannot read someone else’s claim', async () => {
+  await seedWorkflow();
+  // Before this, claims were readable by anyone, so a scammer could copy the
+  // real owner's proof and submit it as their own.
+  await assertFails(getDoc(doc(verified('uid-random'), CLAIM)));
+  await assertFails(getDoc(doc(anon(), CLAIM)));
+});
+
+test('claims: the poster, the claimant and a moderator can read it', async () => {
+  await seedWorkflow();
+  await assertSucceeds(getDoc(doc(verified(OWNER), CLAIM)));
+  await assertSucceeds(getDoc(doc(verified(CLAIMANT), CLAIM)));
+  await assertSucceeds(getDoc(doc(mod('uid-mod'), CLAIM)));
+});
+
+test('claims: the poster can list every claim on their item; nobody else can', async () => {
+  await seedWorkflow();
+  await assertSucceeds(getDocs(collection(verified(OWNER), 'lostFoundItems/item-1/claims')));
+  await assertFails(getDocs(collection(verified(CLAIMANT), 'lostFoundItems/item-1/claims')));
+});
+
+test('claims: "My claims" returns only your own, across every item', async () => {
+  await seedWorkflow();
+  const fs = verified(CLAIMANT);
+  const mine = await assertSucceeds(getDocs(query(collectionGroup(fs, 'claims'), where('claimantUid', '==', CLAIMANT))));
+  assert.strictEqual(mine.size, 1);
+  // an unfiltered collection-group read would expose everyone's proofs
+  await assertFails(getDocs(collectionGroup(fs, 'claims')));
+});
+
+test('reviews: one review per buyer per deal (deterministic id; reviews are create-only)', async () => {
+  await seedMarket();
+  const id = 'reviews/l-sold_uid-buyer';
+  await assertSucceeds(setDoc(doc(verified('uid-buyer'), id),
+    { raterUid: 'uid-buyer', rateeUid: 'uid-seller', rating: 5, contextRef: 'l-sold' }));
+  await assertFails(setDoc(doc(verified('uid-buyer'), id),
+    { raterUid: 'uid-buyer', rateeUid: 'uid-seller', rating: 1, contextRef: 'l-sold' }));
 });

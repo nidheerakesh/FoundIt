@@ -29,9 +29,15 @@ function timeAgo(ms) {
 const createdMs = (d) => (d?.createdAt?.toMillis ? d.createdAt.toMillis() : d?.createdAt || 0);
 
 /** lostFoundItems doc → UI card */
-function lostFoundToCard(id, d) {
+function lostFoundToCard(id, d, meta) {
   return {
     id,
+    // True while this is still a local write the server has not acknowledged.
+    // Anything that queries under the item (its claims) must wait for false:
+    // the claims rule reads the item on the server, and a listen rejected
+    // mid-setup trips an internal assertion in the Firestore SDK that leaves
+    // the client wedged until reload.
+    pending: !!meta?.hasPendingWrites,
     type: d.type, // 'lost' | 'found'
     title: d.title,
     category: d.category,
@@ -94,7 +100,9 @@ export function subscribeFeed(cb, onError = () => {}) {
 
   const unsubLf = onSnapshot(
     query(collection(db, COL.lostFoundItems), orderBy('createdAt', 'desc')),
-    (snap) => { lf = snap.docs.map((doc) => lostFoundToCard(doc.id, doc.data())); emit(); },
+    // Metadata changes too, so a card learns when its write has been acked.
+    { includeMetadataChanges: true },
+    (snap) => { lf = snap.docs.map((doc) => lostFoundToCard(doc.id, doc.data(), doc.metadata)); emit(); },
     onError
   );
   const unsubLs = onSnapshot(

@@ -8,6 +8,7 @@ import Toast from './components/Toast';
 import SmartMatchModal from './components/SmartMatchModal';
 import ClaimModal from './components/ClaimModal';
 import ClaimsReviewModal from './components/ClaimsReviewModal';
+import MyClaimsModal from './components/MyClaimsModal';
 import ChatModal from './components/ChatModal';
 import DealModal from './components/DealModal';
 import FlagModal from './components/FlagModal';
@@ -39,7 +40,7 @@ export default function App() {
     const pairable = baseItems.some((i) => i.type === 'lost' || i.type === 'found');
     if (!pairable) return baseItems;
     return baseItems.map((item) => {
-      if (item.type === 'marketplace' || item.matchScore) return item;
+      if (item.type === 'marketplace' || item.status === 'resolved' || item.matchScore) return item;
       const best = findMatchesForItem(item, baseItems)[0];
       return best ? { ...item, matchScore: best.score, matchedWith: [best.candidate.id] } : item;
     });
@@ -60,6 +61,7 @@ export default function App() {
   const [isFlagOpen, setIsFlagOpen] = useState(false);
   const [isSmartMatchOpen, setIsSmartMatchOpen] = useState(false);
   const [isClaimsReviewOpen, setIsClaimsReviewOpen] = useState(false);
+  const [isMyClaimsOpen, setIsMyClaimsOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isModerationOpen, setIsModerationOpen] = useState(false);
   const [toast, setToast] = useState('');
@@ -218,7 +220,7 @@ export default function App() {
         setSearchQuery={setSearchQuery}
         onOpenPost={openPost}
         smartMatchCount={stats.matches}
-        accountSlot={<AccountMenu onLogin={() => setIsAuthOpen(true)} onOpenProfile={() => setIsProfileOpen(true)} onOpenModeration={() => setIsModerationOpen(true)} />}
+        accountSlot={<AccountMenu onLogin={() => setIsAuthOpen(true)} onOpenProfile={() => setIsProfileOpen(true)} onOpenModeration={() => setIsModerationOpen(true)} onOpenMyClaims={() => setIsMyClaimsOpen(true)} />}
         onOpenAI={() => setIsAIOpen(true)}
       />
 
@@ -354,10 +356,19 @@ export default function App() {
         onFlagSuccess={(msg) => showToast(msg)}
       />
 
+      <MyClaimsModal
+        isOpen={isMyClaimsOpen}
+        onClose={() => setIsMyClaimsOpen(false)}
+        uid={user?.uid}
+        items={items}
+        onOpenChat={(it) => handleOpenChat(it)}
+      />
+
       <ClaimsReviewModal
         isOpen={isClaimsReviewOpen}
         onClose={() => setIsClaimsReviewOpen(false)}
-        item={activeItem}
+        // The live item, so approving flips the screen to "Returned" at once.
+        item={items.find((i) => i.id === activeItem?.id) || activeItem}
         onToast={(msg) => showToast(msg)}
         onOpenChat={(it) => handleOpenChat(it)}
       />

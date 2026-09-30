@@ -43,8 +43,8 @@ export default function ClaimsReviewModal({ isOpen, onClose, item, onToast, onOp
       await resolveClaim(item.id, claimId, status);
       onToast?.(
         status === 'approved'
-          ? 'Claim approved. The item is marked resolved and both of you have been notified.'
-          : 'Claim declined. The claimant has been notified.'
+          ? `"${item.title}" is marked returned. They will see it under My claims.`
+          : 'Claim declined. They will see it under My claims.'
       );
     } catch (err) {
       setError(
@@ -57,6 +57,13 @@ export default function ClaimsReviewModal({ isOpen, onClose, item, onToast, onOp
     }
   };
 
+  // The same screen serves both directions of the workflow.
+  const isFoundPost = item.type === 'found';
+  const heading = isFoundPost ? 'Who says this is theirs' : 'Who says they found it';
+  const proofLabel = isFoundPost ? 'Their proof of ownership' : 'Where and how they found it';
+  const approveHint = isFoundPost
+    ? 'Approve when their proof matches something only the owner would know — then hand it over.'
+    : 'Approve once you have your item back.';
   const pending = claims.filter((c) => c.status === 'pending');
   const settled = claims.filter((c) => c.status !== 'pending');
   const resolved = item.status === 'resolved';
@@ -73,7 +80,7 @@ export default function ClaimsReviewModal({ isOpen, onClose, item, onToast, onOp
             <div style={{ width: 30, height: 30, borderRadius: 9, background: 'var(--accent)', color: '#fff', display: 'grid', placeItems: 'center' }}>
               <ShieldCheck size={17} />
             </div>
-            <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 800 }}>Claims on your item</h2>
+            <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 800 }}>{heading}</h2>
           </div>
           <button type="button" onClick={onClose} className="btn btn-ghost btn-sm btn-icon" aria-label="Close">
             <X size={16} />
@@ -121,7 +128,7 @@ export default function ClaimsReviewModal({ isOpen, onClose, item, onToast, onOp
               marginBottom: 14,
             }}
           >
-            This item is already marked resolved.
+            Returned. This report is closed and takes no new claims.
           </div>
         )}
 
@@ -131,7 +138,7 @@ export default function ClaimsReviewModal({ isOpen, onClose, item, onToast, onOp
           <div style={{ textAlign: 'center', padding: '28px 0', color: 'var(--ink-muted)' }}>
             <Inbox size={40} style={{ margin: '0 auto 10px' }} />
             <p style={{ fontSize: 'var(--text-sm)' }}>
-              No one has claimed this yet. You will get a notification the moment someone does.
+              Nobody yet. The button on your post shows a count as soon as someone responds.
             </p>
           </div>
         ) : (
@@ -173,7 +180,7 @@ export default function ClaimsReviewModal({ isOpen, onClose, item, onToast, onOp
                     }}
                   >
                     <div style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--ink-secondary)', marginBottom: 3 }}>
-                      Their proof of ownership
+                      {proofLabel}
                     </div>
                     {c.proof || <span style={{ color: 'var(--ink-muted)' }}>No proof supplied.</span>}
                   </div>
@@ -197,7 +204,7 @@ export default function ClaimsReviewModal({ isOpen, onClose, item, onToast, onOp
                           disabled={busyId === c.id}
                           onClick={() => act(c.id, 'approved')}
                         >
-                          <Check size={14} /> {busyId === c.id ? 'Working…' : 'Approve'}
+                          <Check size={14} /> {busyId === c.id ? 'Working…' : 'Approve & mark returned'}
                         </button>
                         <button
                           type="button"
@@ -221,8 +228,7 @@ export default function ClaimsReviewModal({ isOpen, onClose, item, onToast, onOp
               );
             })}
             <p style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-muted)', marginTop: 4 }}>
-              Approving marks the item resolved, unlocks reviews and updates both trust scores.
-              Ask for something only the real owner would know before you approve.
+              {approveHint} Approving closes the report for everyone; message them first to arrange the handover.
             </p>
           </>
         )}

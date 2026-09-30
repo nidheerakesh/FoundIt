@@ -1,4 +1,4 @@
-import { doc, collection, addDoc, updateDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './firebase';
 import { COL } from '../types';
@@ -86,7 +86,9 @@ export async function submitReview({ listingId, sellerUid, rating, comment }, ra
   if (!rater?.uid) throw new Error('Must be signed in to submit a review.');
   if (rater.uid === sellerUid) throw new Error('Cannot review yourself.');
 
-  await addDoc(collection(db, COL.reviews), {
+  // One review per buyer per deal: a deterministic id means a second attempt
+  // is an update, which the rules refuse (reviews are create-only).
+  await setDoc(doc(db, COL.reviews, `${listingId}_${rater.uid}`), {
     raterUid: rater.uid,
     raterName: rater.name || 'Campus Student',
     rateeUid: sellerUid,

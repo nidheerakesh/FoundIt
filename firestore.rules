@@ -16,6 +16,10 @@ service cloud.firestore {
     function keeps(field) {
       return request.resource.data.get(field, null) == resource.data.get(field, null);
     }
+    // An update touches only these top-level fields.
+    function changedOnly(keys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
 
     // Public reference data — read-only to clients (seeded/admin via console/functions).
     match /categories/{id} { allow read: if true; allow write: if false; }
@@ -45,13 +49,30 @@ service cloud.firestore {
       // Owner/mod may edit content, but not the server-owned matching/status fields.
       allow update: if (isMod())
         || (signedIn() && resource.data.postedBy == request.auth.uid
-            && keeps('status') && keeps('matchScore') && keeps('matchedWith') && keeps('flagCount'));
+            && keeps('status') && keeps('matchScore') && keeps('matchedWith') && keeps('flagCount'))
+        // Mark returned. Works without Cloud Functions: the poster may resolve
+        // their own report, but only by naming a claim that is approved once
+        // this write lands (getAfter sees the claim approval in the same batch).
+        || (signedIn() && resource.data.postedBy == request.auth.uid
+            && resource.data.status in ['open', 'matched']
+            && request.resource.data.status == 'resolved'
+            && changedOnly(['status', 'resolvedClaimId', 'resolvedAt'])
+            && getAfter(/databases/$(database)/documents/lostFoundItems/$(itemId)/claims/$(request.resource.data.resolvedClaimId)).data.status == 'approved');
       allow delete: if isMod() || (signedIn() && resource.data.postedBy == request.auth.uid);
 
       // Claims: claimant creates their own; only the item owner or a mod resolves it.
       match /claims/{claimId} {
-        allow read: if true;
-        allow create: if isVerified() && request.resource.data.claimantUid == request.auth.uid;
+        function item() { return get(/databases/$(database)/documents/lostFoundItems/$(itemId)).data; }
+        // A claim holds proof of ownership. If anyone could read it, a scammer
+        // could copy the real owner's answer and submit it as their own — so
+        // only the poster who judges it, the claimant, and moderators may.
+        allow read: if isMod()
+          || (signedIn() && item().postedBy == request.auth.uid)
+          || (signedIn() && resource.data.claimantUid == request.auth.uid);
+        // Not on your own post, and not once the item has been returned.
+        allow create: if isVerified() && request.resource.data.claimantUid == request.auth.uid
+          && item().postedBy != request.auth.uid
+          && item().status != 'resolved';
         // Approve/reject only (FR-10). The resolver moves the status and nothing
         // else — it cannot rewrite the claimant's proof or reassign the claim —
         // and only out of 'pending', so the state machine stays one-way
@@ -60,9 +81,18 @@ service cloud.firestore {
             || (signedIn() && get(/databases/$(database)/documents/lostFoundItems/$(itemId)).data.postedBy == request.auth.uid))
           && resource.data.status == 'pending'
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
-          && request.resource.data.status in ['approved', 'rejected'];
+          && request.resource.data.status in ['approved', 'rejected']
+          // Declining is always allowed; approving only while the item is
+          // still unreturned (get() sees the state before this write).
+          && (request.resource.data.status == 'rejected' || item().status != 'resolved');
         allow delete: if false;
       }
+    }
+
+    // "My claims": a collection-group query over every item's claims, filtered
+    // to the caller's own. The filter makes the query provably safe.
+    match /{path=**}/claims/{claimId} {
+      allow read: if signedIn() && resource.data.claimantUid == request.auth.uid;
     }
 
     // Marketplace listings.
@@ -73,7 +103,6 @@ service cloud.firestore {
       function isBuyer() {
         return signedIn() && request.auth.uid == resource.data.get('lastOffer', {}).get('buyerUid', '');
       }
-      function touches(keys) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys); }
       function stored() { return resource.data.get('confirmations', {}); }
       function next() { return request.resource.data.get('confirmations', {}); }
       function bothConfirmed() {
@@ -85,27 +114,27 @@ service cloud.firestore {
       // somebody's listing, and a buyer could forge both confirmations.
       allow update: if isMod()
         // The seller edits their own listing's content. Never the handshake.
-        || (isSeller() && touches(['title', 'description', 'price', 'priceType',
+        || (isSeller() && changedOnly(['title', 'description', 'price', 'priceType',
                                    'condition', 'category', 'location', 'keywords', 'imageURLs']))
         // A buyer places an offer — only lastOffer, only in their own name, and
         // never over a buyer who has already confirmed (that would let a second
         // buyer inherit the first one's confirmation).
-        || (signedIn() && !isSeller() && touches(['lastOffer'])
+        || (signedIn() && !isSeller() && changedOnly(['lastOffer'])
             && request.resource.data.lastOffer.buyerUid == request.auth.uid
             && stored().get('buyer', false) == false)
         // Handshake, for deployments without the confirmTransaction function.
         // Each party records ONLY THEIR OWN confirmation…
-        || (isSeller() && touches(['confirmations'])
+        || (isSeller() && changedOnly(['confirmations'])
             && next().get('seller', false) == true
             && next().get('buyer', false) == stored().get('buyer', false))
-        || (isBuyer() && touches(['confirmations'])
+        || (isBuyer() && changedOnly(['confirmations'])
             && next().get('buyer', false) == true
             && next().get('seller', false) == stored().get('seller', false))
         // …and the flip to sold needs BOTH already stored, so it can never be
         // done in a single write by one side.
         || ((isSeller() || isBuyer()) && bothConfirmed()
             && resource.data.status == 'active'
-            && touches(['status', 'soldAt', 'reviewUnlocked', 'buyerUid'])
+            && changedOnly(['status', 'soldAt', 'reviewUnlocked', 'buyerUid'])
             && request.resource.data.status == 'sold'
             && request.resource.data.reviewUnlocked == true);
       allow delete: if isMod() || (signedIn() && resource.data.sellerUid == request.auth.uid);
