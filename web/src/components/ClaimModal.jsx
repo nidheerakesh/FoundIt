@@ -94,7 +94,8 @@ export default function ClaimModal({ isOpen, onClose, item, user, onClaimSuccess
               Verification Claim Sent!
             </h3>
             <p style={{ color: 'var(--ink-secondary)', fontSize: 'var(--text-sm)', marginBottom: 20 }}>
-              {item.reporter} has received your verification details. You can also send a direct in-app message to coordinate.
+              Your verification details are attached to {item.reporter}&rsquo;s post, for them to review.
+              Message them directly to arrange the handover.
             </p>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
               <button

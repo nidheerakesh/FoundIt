@@ -289,3 +289,81 @@ test('chats: messages are immutable once sent', async () => {
   await seedChat();
   await assertFails(updateDoc(doc(verified('uid-a'), 'chats/c1/messages/m1'), { text: 'edited' }));
 });
+
+// --- chat first contact ----------------------------------------------------
+test('chats: reading a thread that does not exist yet is allowed (first "Message" click)', async () => {
+  await seedChat();
+  // getOrCreateChat reads before it creates. This used to be denied because the
+  // rule dereferenced resource.data on a document that did not exist.
+  await assertSucceeds(getDoc(doc(verified('uid-a'), 'chats/not-created-yet')));
+});
+
+// --- marketplace handshake without Cloud Functions -------------------------
+async function seedOffer(confirmations = {}) {
+  await env.clearFirestore();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'listings/l1'), {
+      title: 'Calculator', sellerUid: 'uid-seller', status: 'active', price: 500,
+      lastOffer: { buyerUid: 'uid-buyer', price: 450 }, confirmations,
+    });
+  });
+}
+const L1 = 'listings/l1';
+
+test('handshake: each party can record their own confirmation', async () => {
+  await seedOffer();
+  await assertSucceeds(updateDoc(doc(verified('uid-buyer'), L1), { confirmations: { buyer: true } }));
+  await seedOffer();
+  await assertSucceeds(updateDoc(doc(verified('uid-seller'), L1), { confirmations: { seller: true } }));
+});
+
+test('handshake: neither party can confirm on the other’s behalf', async () => {
+  await seedOffer();
+  await assertFails(updateDoc(doc(verified('uid-buyer'), L1), { confirmations: { buyer: true, seller: true } }));
+  await seedOffer();
+  await assertFails(updateDoc(doc(verified('uid-seller'), L1), { confirmations: { seller: true, buyer: true } }));
+});
+
+test('handshake: an outsider cannot confirm anything', async () => {
+  await seedOffer();
+  await assertFails(updateDoc(doc(verified('uid-stranger'), L1), { confirmations: { buyer: true } }));
+});
+
+test('handshake: it cannot be marked sold with only one confirmation', async () => {
+  await seedOffer({ buyer: true });
+  await assertFails(updateDoc(doc(verified('uid-buyer'), L1), { status: 'sold', reviewUnlocked: true }));
+});
+
+test('handshake: once both have confirmed, a party can mark it sold', async () => {
+  await seedOffer({ buyer: true, seller: true });
+  await assertSucceeds(updateDoc(doc(verified('uid-seller'), L1), { status: 'sold', reviewUnlocked: true }));
+});
+
+test('handshake: an outsider still cannot mark it sold, even when both confirmed', async () => {
+  await seedOffer({ buyer: true, seller: true });
+  await assertFails(updateDoc(doc(verified('uid-stranger'), L1), { status: 'sold', reviewUnlocked: true }));
+});
+
+test('listings: a stranger cannot reprice or reassign somebody else’s listing', async () => {
+  await seedOffer();
+  await assertFails(updateDoc(doc(verified('uid-stranger'), L1), { price: 1 }));
+  await assertFails(updateDoc(doc(verified('uid-stranger'), L1), { sellerUid: 'uid-stranger' }));
+  // the buyer is no different from a stranger here
+  await assertFails(updateDoc(doc(verified('uid-buyer'), L1), { price: 1 }));
+});
+
+test('listings: the seller can still edit their own listing content', async () => {
+  await seedOffer();
+  await assertSucceeds(updateDoc(doc(verified('uid-seller'), L1), { price: 400, description: 'price drop' }));
+  await assertFails(updateDoc(doc(verified('uid-seller'), L1), { sellerUid: 'uid-other' }));
+});
+
+test('listings: nobody can place an offer in someone else’s name', async () => {
+  await seedOffer();
+  await assertFails(updateDoc(doc(verified('uid-stranger'), L1), { lastOffer: { buyerUid: 'uid-buyer', price: 1 } }));
+});
+
+test('listings: a second buyer cannot take over an offer the first buyer already confirmed', async () => {
+  await seedOffer({ buyer: true });
+  await assertFails(updateDoc(doc(verified('uid-stranger'), L1), { lastOffer: { buyerUid: 'uid-stranger', price: 999 } }));
+});

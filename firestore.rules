@@ -69,18 +69,58 @@ service cloud.firestore {
     match /listings/{listingId} {
       allow read: if true;
       allow create: if isVerified() && request.resource.data.sellerUid == request.auth.uid;
-      // status/soldAt/confirmations/reviewUnlocked are function-owned. Owner may edit
-      // other fields (e.g. lastOffer for the handshake is written by buyer — allow both).
+      function isSeller() { return signedIn() && request.auth.uid == resource.data.sellerUid; }
+      function isBuyer() {
+        return signedIn() && request.auth.uid == resource.data.get('lastOffer', {}).get('buyerUid', '');
+      }
+      function touches(keys) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys); }
+      function stored() { return resource.data.get('confirmations', {}); }
+      function next() { return request.resource.data.get('confirmations', {}); }
+      function bothConfirmed() {
+        return stored().get('seller', false) == true && stored().get('buyer', false) == true;
+      }
+      // Every branch names exactly the fields its author may change. The rule
+      // this replaced let ANY signed-in user write every field except four
+      // server-owned ones — so a stranger could reprice or even reassign
+      // somebody's listing, and a buyer could forge both confirmations.
       allow update: if isMod()
-        || (signedIn()
-            && keeps('status') && keeps('soldAt') && keeps('reviewUnlocked')
-            && keeps('flagCount'));
+        // The seller edits their own listing's content. Never the handshake.
+        || (isSeller() && touches(['title', 'description', 'price', 'priceType',
+                                   'condition', 'category', 'location', 'keywords', 'imageURLs']))
+        // A buyer places an offer — only lastOffer, only in their own name, and
+        // never over a buyer who has already confirmed (that would let a second
+        // buyer inherit the first one's confirmation).
+        || (signedIn() && !isSeller() && touches(['lastOffer'])
+            && request.resource.data.lastOffer.buyerUid == request.auth.uid
+            && stored().get('buyer', false) == false)
+        // Handshake, for deployments without the confirmTransaction function.
+        // Each party records ONLY THEIR OWN confirmation…
+        || (isSeller() && touches(['confirmations'])
+            && next().get('seller', false) == true
+            && next().get('buyer', false) == stored().get('buyer', false))
+        || (isBuyer() && touches(['confirmations'])
+            && next().get('buyer', false) == true
+            && next().get('seller', false) == stored().get('seller', false))
+        // …and the flip to sold needs BOTH already stored, so it can never be
+        // done in a single write by one side.
+        || ((isSeller() || isBuyer()) && bothConfirmed()
+            && resource.data.status == 'active'
+            && touches(['status', 'soldAt', 'reviewUnlocked', 'buyerUid'])
+            && request.resource.data.status == 'sold'
+            && request.resource.data.reviewUnlocked == true);
       allow delete: if isMod() || (signedIn() && resource.data.sellerUid == request.auth.uid);
     }
 
     // Chats — participants only.
     match /chats/{chatId} {
-      allow read, update: if signedIn() && request.auth.uid in resource.data.participants;
+      // getOrCreateChat reads before it creates. On a document that does not
+      // exist yet `resource` is null, so dereferencing resource.data denied the
+      // read outright — that is what made the very first "Message" click fail
+      // with "Missing or insufficient permissions". Nothing lists chats, so
+      // get-only is enough and list stays closed.
+      allow get: if signedIn() && (resource == null || request.auth.uid in resource.data.participants);
+      allow list: if false;
+      allow update: if signedIn() && request.auth.uid in resource.data.participants;
       allow create: if signedIn() && request.auth.uid in request.resource.data.participants;
       // Subcollection rules do NOT inherit the parent's gate. Without repeating
       // the participant check here, any signed-in student who could guess a
@@ -90,8 +130,8 @@ service cloud.firestore {
       // message would avoid that if it ever matters.
       match /messages/{msgId} {
         function inThread() {
-          return signedIn()
-            && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+          let chat = get(/databases/$(database)/documents/chats/$(chatId));
+          return signedIn() && chat != null && request.auth.uid in chat.data.participants;
         }
         allow read: if inThread();
         allow create: if inThread() && request.auth.uid == request.resource.data.senderUid;

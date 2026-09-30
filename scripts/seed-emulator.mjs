@@ -18,8 +18,27 @@ if (!/^(127\.0\.0\.1|localhost|\[::1\]):/.test(process.env.FIRESTORE_EMULATOR_HO
 const require = createRequire(new URL('../web/package.json', import.meta.url));
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
+const { getAuth } = require('firebase-admin/auth');
 initializeApp({ projectId: 'foundit-demo' });
 const db = getFirestore();
+
+// Own the seeded posts with the real demo-account uids when they exist, so
+// ownership-gated UI (Review claims, the deal handshake) is reachable after
+// signing in as one of them. Falls back to synthetic uids if they are absent.
+const DEMO_EMAIL = {
+  'uid-riya': 'riya.demo@iiitkottayam.ac.in',
+  'uid-arjun': 'arjun.demo@iiitkottayam.ac.in',
+  'uid-meera': 'meera.demo@iiitkottayam.ac.in',
+};
+const uidMap = {};
+for (const [placeholder, email] of Object.entries(DEMO_EMAIL)) {
+  try {
+    uidMap[placeholder] = (await getAuth().getUserByEmail(email)).uid;
+  } catch {
+    uidMap[placeholder] = placeholder;
+  }
+}
+const realUid = (u) => uidMap[u] || u;
 
 const now = Date.now();
 const kw = (...p) => [...new Set(p.join(' ').toLowerCase().match(/[a-z0-9]{3,}/g) || [])].slice(0, 12);
@@ -36,7 +55,7 @@ const listings = [
 ];
 
 for (const [uid, name, dept, trust] of [['uid-riya','Riya Singh','CSE',82],['uid-arjun','Arjun Nair','ECE',74],['uid-meera','Meera Das','CSE',68]]) {
-  await db.doc(`users/${uid}`).set({ name, dept, trustScore: trust, trustTier: 'trusted', verified: true, createdAt: new Date(now - 90*86400000) });
+  await db.doc(`users/${realUid(uid)}`).set({ name, dept, hostelOrDept: dept, trustScore: trust, trustTier: 'trusted', verified: true, createdAt: new Date(now - 90*86400000) }, { merge: true });
 }
 
 let i = 0;
@@ -44,7 +63,7 @@ for (const [type, title, description, category, zone, uid, reporter, dept, trust
   await db.doc(`lostFoundItems/ui-${++i}`).set({
     type, title, description, category, keywords: kw(title, description),
     zoneId: zone, location: zone, imageURLs: [], status: 'open',
-    postedBy: uid, reporterName: reporter, dept, verified: true, trustScore: trust,
+    postedBy: realUid(uid), reporterName: reporter, dept, verified: true, trustScore: trust,
     createdAt: new Date(now - i * 3600000),
   });
 }
@@ -53,7 +72,7 @@ for (const [title, description, category, price, priceType, condition, uid, sell
   await db.doc(`listings/ui-l${++j}`).set({
     title, description, category, price, priceType, condition,
     keywords: kw(title, description), location: 'Hostel Complex', imageURLs: [],
-    status: 'active', sellerUid: uid, sellerName: seller, dept: 'CSE', verified: true, trustScore: 70,
+    status: 'active', sellerUid: realUid(uid), sellerName: seller, dept: 'CSE', verified: true, trustScore: 70,
     createdAt: new Date(now - j * 7200000),
   });
 }

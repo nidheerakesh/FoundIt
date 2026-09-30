@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X, ShieldCheck, Compass } from 'lucide-react';
-import { signInWithGoogle, campusDomainHint } from './authApi';
+import { signInWithGoogle, campusDomainHint, login } from './authApi';
+import { DEMO_ACCOUNTS, DEMO_AUTH_ENABLED } from './demoAccounts';
 import { useAuth } from './AuthContext';
 
 const FRIENDLY = {
@@ -71,6 +72,40 @@ export default function AuthModal({ isOpen, onClose }) {
         >
           <GoogleIcon /> {busy ? 'Opening Google…' : 'Continue with Google'}
         </button>
+
+        {DEMO_AUTH_ENABLED && (
+          <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+            <p style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--ink-secondary)', marginBottom: 4 }}>
+              DEMO ACCOUNTS
+            </p>
+            <p style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-muted)', marginBottom: 10 }}>
+              Pre-verified test users. Enabled by VITE_DEMO_AUTH — never switch this on in a real deployment.
+            </p>
+            {DEMO_ACCOUNTS.map((a) => (
+              <button
+                key={a.email}
+                type="button"
+                disabled={busy}
+                className="btn btn-ghost btn-sm"
+                style={{ width: '100%', justifyContent: 'flex-start', marginBottom: 6 }}
+                onClick={async () => {
+                  setBusy(true);
+                  setError('');
+                  try {
+                    await login({ email: a.email, password: a.password });
+                    onClose?.();
+                  } catch (err) {
+                    setError(`${err.message} — run: node scripts/seed-demo-users.mjs`);
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                {a.name} · {a.role}
+              </button>
+            ))}
+          </div>
+        )}
 
         {(error || redirectError) && <Banner>{error || redirectError}</Banner>}
 

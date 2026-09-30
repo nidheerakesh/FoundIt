@@ -1,14 +1,15 @@
 # FoundIt — How the system is tested
 
-Four suites, 90 tests. Three run without any cloud project; the fourth needs a
-browser. Nothing here talks to the live Firebase project.
+Five suites. Three run without any cloud project; two drive a real browser.
+Nothing here talks to the live Firebase project.
 
 | Suite | Tests | What it proves | Needs |
 |---|---|---|---|
 | Unit — pure logic | 13 | Match and trust formulas, match fan-out decisions | nothing |
 | Integration — Cloud Functions | 28 | Every trigger and callable, against real Firestore | Firestore emulator |
-| Security rules | 33 | Every collection, from the client's side | Firestore emulator |
-| Frontend smoke | 16 | The real app in a real browser on live data | emulator + dev server |
+| Security rules | 44 | Every collection, from the client's side | Firestore emulator |
+| Frontend smoke | 16 | The signed-out app in a real browser on live data | emulator + dev server |
+| User journeys | ~30 checks | Three signed-in demo users driving every flow | Firestore + Auth emulators |
 
 ## 1. Unit tests — no emulator
 
@@ -88,12 +89,46 @@ no uncaught page errors.
 Set `CHROMIUM_PATH` if Playwright should use a system browser instead of its
 own download.
 
+## 5. Signed-in user journeys — demo accounts
+
+Sign-in is Google-only in production, which a test cannot drive. Demo accounts
+fill that gap: real Firebase email/password users created with
+`emailVerified: true`, so **every security rule applies to them exactly as to a
+student** — nothing about auth is bypassed.
+
+```bash
+# Firestore from the jar (the CLI's rules hot-reload makes a network call that
+# fails offline and takes the emulator down with it), Auth from the CLI.
+java -jar ~/.cache/firebase/emulators/cloud-firestore-emulator-*.jar \
+  --host=127.0.0.1 --port=8080 &
+firebase emulators:start --only auth --project foundit-demo &
+
+# Load the real rules into the jar-run emulator
+curl -X PUT "http://127.0.0.1:8080/emulator/v1/projects/foundit-demo:securityRules" \
+  -H 'Content-Type: application/json' \
+  --data "$(jq -n --rawfile r firestore.rules '{rules:{files:[{name:"firestore.rules",content:$r}]}}')"
+
+export FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
+node scripts/seed-demo-users.mjs     # Riya, Arjun (students), Meera (moderator)
+node scripts/seed-emulator.mjs       # feed owned by those accounts
+
+echo 'VITE_DEMO_AUTH=true' > web/.env.local
+npm --prefix web run dev
+```
+
+The sign-in modal then lists the three accounts. The project id must be
+`foundit-demo` everywhere — it is what `web/src/lib/firebase.js` defaults to, and
+accounts created under any other id are invisible to the app.
+
+Journeys exercised: posting a report; claiming it, chatting, and the owner
+reading the proof and approving; the full marketplace handshake (offer → buyer
+confirms → seller confirms → sold); flagging and the moderator queue.
+
+**Never set `VITE_DEMO_AUTH=true` on a real deployment.** The accounts' password
+is in the source.
+
 ## Not covered
 
-- **Authenticated UI journeys.** Sign-in is Google-only and the Auth emulator is
-  not part of this setup, so the browser tests exercise the signed-out app.
-  Posting, claiming, chat and the claims review screen are covered at the
-  function and rules layer instead.
 - **`setUserRole`'s happy path.** Its guards are tested, but the success path
   calls `getAuth().setCustomUserClaims`, which needs the Auth emulator.
 - **Storage rules.** No image upload path is currently wired to the UI.

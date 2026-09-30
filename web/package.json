@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test:ui": "node --test --test-timeout 60000 test/ui.test.mjs"
+    "test:ui": "node --test --test-timeout 60000 test/ui.test.mjs",
+    "test:journeys": "node test/journeys.mjs"
   },
   "dependencies": {
     "firebase": "^11.10.0",

@@ -13,7 +13,9 @@ export default function ItemCard({ item, index = 0, currentUid = null, onClaim, 
   const badge = TYPE_BADGE[item.type] ?? TYPE_BADGE.marketplace;
   const isMarket = item.type === 'marketplace';
   // Mock/demo cards carry no postedBy, so this is false for them — they stay claimable.
-  const isOwn = !!currentUid && item.postedBy === currentUid;
+  const isOwn = !!currentUid && (item.postedBy || item.sellerUid) === currentUid;
+  const isSold = isMarket && item.status === 'sold';
+  const hasOffer = isMarket && !!item.lastOffer;
 
   const priceLabel = isMarket
     ? item.listingType === 'Giveaway' || item.price === 0
@@ -108,7 +110,17 @@ export default function ItemCard({ item, index = 0, currentUid = null, onClaim, 
 
       {/* Actions */}
       <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-        {isMarket ? (
+        {isSold ? (
+          <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} disabled>
+            Sold
+          </button>
+        ) : isMarket && isOwn ? (
+          // Your own listing: you confirm a buyer's offer, you do not make one.
+          <button className="btn btn-success btn-sm" style={{ flex: 1 }} disabled={!hasOffer}
+            onClick={() => onHandshake?.(item)}>
+            <Handshake size={15} /> {hasOffer ? 'Confirm sale' : 'No offers yet'}
+          </button>
+        ) : isMarket ? (
           <button className="btn btn-success btn-sm" style={{ flex: 1 }} onClick={() => onHandshake?.(item)}>
             <Handshake size={15} /> Make a deal
           </button>

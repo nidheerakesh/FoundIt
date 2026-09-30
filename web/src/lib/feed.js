@@ -71,6 +71,12 @@ function listingToCard(id, d) {
     price: d.price ?? 0,
     listingType: PRICE_TO_LISTING[d.priceType] || 'Sell',
     condition: d.condition || '',
+    // The handshake needs these: who sells, who offered, who has confirmed.
+    // Without sellerUid the review had no real person to rate.
+    sellerUid: d.sellerUid || null,
+    status: d.status || 'active',
+    lastOffer: d.lastOffer || null,
+    confirmations: d.confirmations || {},
     tags: d.keywords || [],
     imageURL: d.imageURLs?.[0] || null,
     _sort: createdMs(d),
@@ -104,8 +110,27 @@ function deriveKeywords(...parts) {
   return [...new Set(parts.join(' ').toLowerCase().match(/[a-z0-9]{3,}/g) || [])].slice(0, 12);
 }
 
+/**
+ * The denormalised poster fields every feed write carries. Firestore rejects a
+ * whole document with `invalid-argument` if any field is `undefined`, so one
+ * missing optional display field (a profile without a department, say) would
+ * otherwise block the post entirely with an unhelpful error. Defaults here keep
+ * the write valid; `uid` is the only field that must be real.
+ */
+function posterFields(poster) {
+  if (!poster?.uid) throw new Error('Sign in to post.');
+  return {
+    uid: poster.uid,
+    name: poster.name || 'Student',
+    dept: poster.dept || '',
+    verified: !!poster.verified,
+    trustScore: poster.trustScore ?? 50,
+  };
+}
+
 /** Write a lost/found report. `poster` carries the denormalized display fields. */
 export async function addLostFound(form, poster) {
+  const who = posterFields(poster);
   return addDoc(collection(db, COL.lostFoundItems), {
     type: form.type, // 'lost' | 'found'
     title: form.title,
@@ -116,11 +141,11 @@ export async function addLostFound(form, poster) {
     location: form.location,
     imageURLs: [],
     status: 'open',
-    postedBy: poster.uid,
-    reporterName: poster.name,
-    dept: poster.dept,
-    verified: poster.verified,
-    trustScore: poster.trustScore,
+    postedBy: who.uid,
+    reporterName: who.name,
+    dept: who.dept,
+    verified: who.verified,
+    trustScore: who.trustScore,
     matchedWith: [],
     matchScore: null,
     createdAt: serverTimestamp(),
@@ -129,6 +154,7 @@ export async function addLostFound(form, poster) {
 
 /** Write a marketplace listing. */
 export async function addListing(form, poster) {
+  const who = posterFields(poster);
   return addDoc(collection(db, COL.listings), {
     title: form.title,
     description: form.description,
@@ -140,11 +166,11 @@ export async function addListing(form, poster) {
     location: form.location,
     imageURLs: [],
     status: 'active',
-    sellerUid: poster.uid,
-    sellerName: poster.name,
-    dept: poster.dept,
-    verified: poster.verified,
-    trustScore: poster.trustScore,
+    sellerUid: who.uid,
+    sellerName: who.name,
+    dept: who.dept,
+    verified: who.verified,
+    trustScore: who.trustScore,
     createdAt: serverTimestamp(),
   });
 }
