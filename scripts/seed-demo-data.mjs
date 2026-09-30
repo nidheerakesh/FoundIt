@@ -131,6 +131,29 @@ for (const [key, p] of Object.entries(P)) {
 const H = 3600000;
 const ago = (hours) => Timestamp.fromMillis(Date.now() - hours * H);
 const kw = (...parts) => [...new Set(parts.join(' ').toLowerCase().match(/[a-z0-9]{3,}/g) || [])].slice(0, 12);
+
+// Mirrors derivePublicTags in web/src/lib/feed.js. A lost/found description is
+// private, so its words must not reach the public card as keywords either —
+// only the title plus these generic terms do.
+const COARSE_VOCAB = [
+  'black', 'blue', 'red', 'green', 'white', 'grey', 'gray', 'brown', 'yellow',
+  'orange', 'purple', 'pink', 'silver', 'golden', 'transparent',
+  'metal', 'steel', 'plastic', 'leather', 'cloth', 'fabric', 'wooden', 'glass',
+  'rubber', 'paper', 'canvas',
+  'bottle', 'flask', 'calculator', 'notebook', 'book', 'notes', 'register',
+  'charger', 'cable', 'adapter', 'card', 'wallet', 'purse', 'bag', 'backpack',
+  'umbrella', 'glasses', 'spectacles', 'watch', 'phone', 'laptop', 'tablet',
+  'headphones', 'earphones', 'earbuds', 'keys', 'keychain', 'hoodie', 'jacket',
+  'shirt', 'shoes', 'sandals', 'cycle', 'bicycle', 'helmet', 'lamp', 'fridge',
+  'racket', 'coat', 'labcoat', 'pen', 'file', 'folder', 'lunchbox', 'tiffin',
+  'mouse', 'keyboard', 'ring', 'chain', 'bracelet', 'scarf', 'cap',
+];
+const publicTags = (title = '', description = '') => {
+  const fromTitle = title.toLowerCase().match(/[a-z0-9]{3,}/g) || [];
+  const hay = ` ${description.toLowerCase()} `;
+  const fromDescription = COARSE_VOCAB.filter((w) => new RegExp(`\\b${w}\\b`).test(hay));
+  return [...new Set([...fromTitle, ...fromDescription])].slice(0, 12);
+};
 const poster = (p) => ({ postedBy: p.uid, reporterName: p.name, dept: p.dept, verified: true, trustScore: p.trust });
 const seller = (p) => ({ sellerUid: p.uid, sellerName: p.name, dept: p.dept, verified: true, trustScore: p.trust });
 
@@ -158,7 +181,10 @@ const reports = [
 ];
 for (const [id, type, title, description, category, zone, who, hours, status = 'open'] of reports) {
   await db.doc(`lostFoundItems/${id}`).set({
-    type, title, description, category, keywords: kw(title, description),
+    // No `description` here — it goes to the private subdocument below, so a
+    // claimant cannot read the owner's identifying details off the card.
+    type, title, category, keywords: publicTags(title, description),
+    hasDetail: true,
     zoneId: zone, location: zone, imageURLs: [], status,
     ...poster(who),
     // Left empty on purpose: the client computes match scores when the
@@ -167,6 +193,9 @@ for (const [id, type, title, description, category, zone, who, hours, status = '
     createdAt: ago(hours),
     // Both returned items went back via Kabir's approved claim (seeded below).
     ...(status === 'resolved' ? { resolvedClaimId: P.kabir.uid, resolvedAt: ago(hours - 20) } : {}),
+  });
+  await db.doc(`lostFoundItems/${id}/private/detail`).set({
+    description, createdAt: ago(hours),
   });
 }
 

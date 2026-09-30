@@ -60,6 +60,19 @@ service cloud.firestore {
             && getAfter(/databases/$(database)/documents/lostFoundItems/$(itemId)/claims/$(request.resource.data.resolvedClaimId)).data.status == 'approved');
       allow delete: if isMod() || (signedIn() && resource.data.postedBy == request.auth.uid);
 
+      // The poster's own description of the item. A claim is judged on details
+      // only the true owner should know, so those details cannot sit on the
+      // publicly readable card — a fraudster would read them and hand them
+      // straight back as proof. Rules are document-level, so hiding one field
+      // means giving it its own document. Coarse tags on the parent drive
+      // matching instead.
+      match /private/{docId} {
+        function parent() { return get(/databases/$(database)/documents/lostFoundItems/$(itemId)).data; }
+        allow read: if isMod() || (signedIn() && parent().postedBy == request.auth.uid);
+        allow create, update: if signedIn() && parent().postedBy == request.auth.uid;
+        allow delete: if false;
+      }
+
       // Claims: claimant creates their own; only the item owner or a mod resolves it.
       match /claims/{claimId} {
         function item() { return get(/databases/$(database)/documents/lostFoundItems/$(itemId)).data; }

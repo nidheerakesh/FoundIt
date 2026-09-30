@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { MapPin, Clock, Sparkles, MessageCircle, Handshake, Flag, Package, ShieldCheck, CheckCircle2 } from 'lucide-react';
 import { subscribePendingCount } from '../lib/claims';
+import { getItemDetail } from '../lib/feed';
 import TrustBadge from './TrustBadge';
 
 const TYPE_BADGE = {
@@ -29,6 +30,17 @@ export default function ItemCard({ item, index = 0, currentUid = null, myClaim =
     if (!isOwn || isMarket || isReturned || item.pending) return undefined;
     return subscribePendingCount(item.id, setPending);
   }, [isOwn, isMarket, isReturned, item.pending, item.id]);
+
+  // Your own description lives in a private subdocument, so it takes a read.
+  // Only fetch it for your own posts; for anyone else the rules would refuse.
+  const [ownDetail, setOwnDetail] = useState('');
+  useEffect(() => {
+    if (!isOwn || isMarket || !item.hasDetail || item.description) return;
+    let live = true;
+    getItemDetail(item.id).then((d) => { if (live) setOwnDetail(d); });
+    // eslint-disable-next-line consistent-return
+    return () => { live = false; };
+  }, [isOwn, isMarket, item.hasDetail, item.description, item.id]);
 
   const priceLabel = isMarket
     ? item.listingType === 'Giveaway' || item.price === 0
@@ -92,9 +104,22 @@ export default function ItemCard({ item, index = 0, currentUid = null, myClaim =
         )}
       </div>
 
-      <p style={{ color: 'var(--ink-secondary)', fontSize: 'var(--text-sm)', margin: '8px 0 14px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-        {item.description}
-      </p>
+      {/* Marketplace copy is a sales pitch and stays public. A lost/found
+          description names the marks that prove ownership, so only its poster
+          sees it — otherwise a claimant could read it and repeat it back. */}
+      {isMarket || item.description ? (
+        <p style={{ color: 'var(--ink-secondary)', fontSize: 'var(--text-sm)', margin: '8px 0 14px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+          {item.description || ownDetail}
+        </p>
+      ) : (
+        <p style={{ color: 'var(--ink-muted)', fontSize: 'var(--text-sm)', margin: '8px 0 14px', fontStyle: 'italic' }}>
+          {isOwn
+            ? (ownDetail || (item.hasDetail ? 'Loading your description…' : 'No description added.'))
+            : item.hasDetail
+              ? 'Details are private — describe it yourself when you claim.'
+              : 'No description added.'}
+        </p>
+      )}
 
       {/* Meta */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 'var(--text-xs)', color: 'var(--ink-muted)', marginBottom: 14 }}>

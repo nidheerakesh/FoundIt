@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { X, Inbox, ShieldCheck, MapPin, Check, Ban, MessageSquare } from 'lucide-react';
 import { subscribeClaims, resolveClaim } from '../lib/claims';
 import { calculateMatchScore } from '../lib/matching';
+import { getItemDetail } from '../lib/feed';
 
 const STATUS_BADGE = {
   pending: { label: 'Pending', className: 'badge' },
@@ -26,6 +27,16 @@ export default function ClaimsReviewModal({ isOpen, onClose, item, items = [], o
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState(null);
+
+  // Your own description is private, so it takes a read. You need it here:
+  // judging a claim means comparing their proof against what you wrote.
+  const [myDetail, setMyDetail] = useState('');
+  useEffect(() => {
+    if (!isOpen || !item?.id) return undefined;
+    let live = true;
+    getItemDetail(item.id).then((d) => { if (live) setMyDetail(d); });
+    return () => { live = false; };
+  }, [isOpen, item?.id]);
 
   // Resolve a claim's linked report to something displayable. The feed only
   // holds open posts, so a linked report that has since been resolved may not
@@ -144,6 +155,27 @@ export default function ClaimsReviewModal({ isOpen, onClose, item, items = [], o
             }}
           >
             Returned. This report is closed and takes no new claims.
+          </div>
+        )}
+
+        {/* What you wrote, shown only to you. Judging a claim means comparing
+            their proof against this — and nobody else can read it, which is
+            what makes the comparison meaningful. */}
+        {myDetail && (
+          <div
+            style={{
+              background: 'var(--surface-raised)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-md)',
+              padding: '9px 12px',
+              fontSize: 'var(--text-sm)',
+              marginBottom: 14,
+            }}
+          >
+            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--ink-secondary)', marginBottom: 3 }}>
+              Your description — private to you
+            </div>
+            {myDetail}
           </div>
         )}
 

@@ -6,7 +6,7 @@
 // standard Firestore feed pattern. The authoritative trust value still lives on the
 // user doc and is recomputed server-side (docs/SCORING.md).
 import {
-  collection, addDoc, onSnapshot, query, orderBy, serverTimestamp,
+  collection, doc, addDoc, setDoc, getDoc, onSnapshot, query, orderBy, serverTimestamp,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { COL } from '../types';
@@ -43,7 +43,13 @@ function lostFoundToCard(id, d, meta) {
     category: d.category,
     location: d.location || d.zoneId || 'Campus',
     date: timeAgo(createdMs(d)),
-    description: d.description,
+    // Not on the card: the description lives in a private subdocument so a
+    // claimant cannot read the owner's identifying details and repeat them
+    // back as proof. `hasDetail` says one exists without revealing it; the
+    // poster loads their own with getItemDetail(). Older posts written before
+    // the split still carry it inline, so fall back for those.
+    description: d.description || '',
+    hasDetail: d.hasDetail ?? !!d.description,
     reporter: d.reporterName || 'Student',
     dept: d.dept || '',
     verified: !!d.verified,
@@ -118,6 +124,58 @@ function deriveKeywords(...parts) {
   return [...new Set(parts.join(' ').toLowerCase().match(/[a-z0-9]{3,}/g) || [])].slice(0, 12);
 }
 
+// Generic attributes only. A lost/found description names the marks that prove
+// ownership ("MEERA scratched on the back"), so it must not reach the public
+// document — and neither may keywords derived from it, which would leak the
+// same words as a list. Matching therefore runs on the title plus these coarse
+// terms: copying "blue" and "notebook" tells a fraudster nothing that passes a
+// proof check.
+const COARSE_VOCAB = [
+  // colour
+  'black', 'blue', 'red', 'green', 'white', 'grey', 'gray', 'brown', 'yellow',
+  'orange', 'purple', 'pink', 'silver', 'golden', 'transparent',
+  // material
+  'metal', 'steel', 'plastic', 'leather', 'cloth', 'fabric', 'wooden', 'glass',
+  'rubber', 'paper', 'canvas',
+  // kind
+  'bottle', 'flask', 'calculator', 'notebook', 'book', 'notes', 'register',
+  'charger', 'cable', 'adapter', 'card', 'wallet', 'purse', 'bag', 'backpack',
+  'umbrella', 'glasses', 'spectacles', 'watch', 'phone', 'laptop', 'tablet',
+  'headphones', 'earphones', 'earbuds', 'keys', 'keychain', 'hoodie', 'jacket',
+  'shirt', 'shoes', 'sandals', 'cycle', 'bicycle', 'helmet', 'lamp', 'fridge',
+  'racket', 'coat', 'labcoat', 'pen', 'file', 'folder', 'lunchbox', 'tiffin',
+  'mouse', 'keyboard', 'ring', 'chain', 'bracelet', 'scarf', 'cap',
+];
+
+/**
+ * Public, non-identifying tags for matching: every word of the title (already
+ * visible on the card) plus any coarse vocabulary term the description
+ * mentions. Nothing specific enough to serve as proof ever leaves the private
+ * subdocument.
+ */
+function derivePublicTags(title = '', description = '') {
+  const fromTitle = title.toLowerCase().match(/[a-z0-9]{3,}/g) || [];
+  const hay = ` ${description.toLowerCase()} `;
+  const fromDescription = COARSE_VOCAB.filter((w) => new RegExp(`\\b${w}\\b`).test(hay));
+  return [...new Set([...fromTitle, ...fromDescription])].slice(0, 12);
+}
+
+/**
+ * The poster's own description of a lost/found report. Lives in a subdocument
+ * because Firestore rules are document-level: there is no way to allow reading
+ * a document's title while denying its description. Returns '' when the caller
+ * is not allowed to read it.
+ */
+export async function getItemDetail(itemId) {
+  if (!itemId) return '';
+  try {
+    const snap = await getDoc(doc(db, COL.lostFoundItems, itemId, 'private', 'detail'));
+    return snap.exists() ? snap.data().description || '' : '';
+  } catch {
+    return ''; // permission-denied for anyone but the poster and moderators
+  }
+}
+
 /**
  * The denormalised poster fields every feed write carries. Firestore rejects a
  * whole document with `invalid-argument` if any field is `undefined`, so one
@@ -136,15 +194,23 @@ function posterFields(poster) {
   };
 }
 
-/** Write a lost/found report. `poster` carries the denormalized display fields. */
+/**
+ * Write a lost/found report. `poster` carries the denormalized display fields.
+ *
+ * The description is written to a private subdocument, not the card. It names
+ * the marks that prove ownership, and a claim is judged on exactly those marks
+ * — public, it hands a fraudster their answer. Rules are document-level, so
+ * the only way to hide one field is to put it in its own document.
+ */
 export async function addLostFound(form, poster) {
   const who = posterFields(poster);
-  return addDoc(collection(db, COL.lostFoundItems), {
+  const ref = await addDoc(collection(db, COL.lostFoundItems), {
     type: form.type, // 'lost' | 'found'
     title: form.title,
-    description: form.description,
     category: form.category,
-    keywords: deriveKeywords(form.title, form.description),
+    // Coarse terms only — see derivePublicTags.
+    keywords: derivePublicTags(form.title, form.description),
+    hasDetail: !!form.description?.trim(),
     zoneId: form.location,
     location: form.location,
     imageURLs: [],
@@ -158,6 +224,20 @@ export async function addLostFound(form, poster) {
     matchScore: null,
     createdAt: serverTimestamp(),
   });
+
+  if (form.description?.trim()) {
+    // Separate write: the card is already live, and a failure here must not
+    // lose the report. The poster can still be reached through chat.
+    await setDoc(doc(db, COL.lostFoundItems, ref.id, 'private', 'detail'), {
+      description: form.description.trim(),
+      createdAt: serverTimestamp(),
+    }).catch((err) => {
+      // eslint-disable-next-line no-console
+      console.warn('[FoundIt] Could not save private detail:', err.code || err.message);
+    });
+  }
+
+  return ref;
 }
 
 /** Write a marketplace listing. */
