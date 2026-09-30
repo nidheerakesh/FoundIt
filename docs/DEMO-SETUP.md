@@ -40,6 +40,16 @@ starting state, for example between rehearsals. It only touches documents whose
 id starts with `demo-`, so posts made by real users are left alone.
 `--reset` removes the demo documents without re-seeding.
 
+To leave **only** the demo data, deleting test posts too, add `--wipe-all`:
+
+```bash
+node scripts/seed-demo-data.mjs --project foundit-fcfcc --wipe-all
+```
+
+This deletes every post, claim, chat, notification, flag and review before
+seeding. User profiles and sign-in accounts are kept. It can't be undone, and
+it waits 5 seconds first so you can press Ctrl+C.
+
 ## 5. Show the demo sign-in buttons on Vercel
 
 Vercel → project → **Settings** → **Environment Variables**:
