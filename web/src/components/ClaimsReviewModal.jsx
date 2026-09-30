@@ -225,7 +225,7 @@ export default function ClaimsReviewModal({ isOpen, onClose, item, onToast, onOp
                     <button
                       type="button"
                       className="btn btn-ghost btn-sm"
-                      onClick={() => { onClose(); onOpenChat?.(item); }}
+                      onClick={() => { onClose(); onOpenChat?.(item, { uid: c.claimantUid, name: c.claimantName || 'Student' }); }}
                     >
                       <MessageSquare size={14} /> Message
                     </button>

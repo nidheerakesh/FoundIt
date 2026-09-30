@@ -120,9 +120,11 @@ export default function App() {
     setIsClaimsReviewOpen(true);
   };
 
-  const handleOpenChat = (target) => {
+  const [chatWith, setChatWith] = useState(null);
+  const handleOpenChat = (target, person = null) => {
     if (!isAuthed) { showToast('Sign in with your campus account to message students.'); setIsAuthOpen(true); return; }
     setActiveItem(target);
+    setChatWith(person);
     setIsChatOpen(true);
   };
 
@@ -360,13 +362,14 @@ export default function App() {
         item={activeItem}
         user={poster || user}
         onClaimSuccess={(msg) => showToast(msg)}
-        onOpenChat={(it) => handleOpenChat(it)}
+        onOpenChat={(it, who) => handleOpenChat(it, who)}
       />
 
       <ChatModal
         isOpen={isChatOpen}
         onClose={() => setIsChatOpen(false)}
         item={activeItem}
+        target={chatWith}
         currentUser={poster || user}
       />
 
@@ -376,7 +379,7 @@ export default function App() {
         listing={activeItem}
         currentUser={poster || user}
         onDealSuccess={(msg) => showToast(msg)}
-        onOpenChat={(it) => handleOpenChat(it)}
+        onOpenChat={(it, who) => handleOpenChat(it, who)}
       />
 
       <FlagModal
@@ -392,7 +395,7 @@ export default function App() {
         onClose={() => setIsMyClaimsOpen(false)}
         uid={user?.uid}
         items={items}
-        onOpenChat={(it) => handleOpenChat(it)}
+        onOpenChat={(it, who) => handleOpenChat(it, who)}
       />
 
       <ClaimsReviewModal
@@ -401,7 +404,7 @@ export default function App() {
         // The live item, so approving flips the screen to "Returned" at once.
         item={items.find((i) => i.id === activeItem?.id) || activeItem}
         onToast={(msg) => showToast(msg)}
-        onOpenChat={(it) => handleOpenChat(it)}
+        onOpenChat={(it, who) => handleOpenChat(it, who)}
       />
 
       <SmartMatchModal
@@ -409,7 +412,7 @@ export default function App() {
         onClose={() => setIsSmartMatchOpen(false)}
         targetItem={activeItem}
         matchResult={activeMatchResult}
-        onOpenChat={(it) => handleOpenChat(it)}
+        onOpenChat={(it, who) => handleOpenChat(it, who)}
         onOpenClaim={(it) => handleOpenClaim(it)}
       />
 

@@ -1,6 +1,6 @@
 # FoundIt — How the system is tested
 
-Six suites. Three run without any cloud project; two drive a real browser.
+Seven suites. Three run without any cloud project; two drive a real browser.
 Nothing here talks to the live Firebase project.
 
 | Suite | Tests | What it proves | Needs |
@@ -11,6 +11,7 @@ Nothing here talks to the live Firebase project.
 | Frontend smoke | 16 | The signed-out app in a real browser on live data | emulator + dev server |
 | User journeys | 62 checks | Three signed-in demo users driving every flow | Firestore + Auth emulators |
 | Demo data | 18 checks | Every story the demo seed sets up can be played | Firestore + Auth emulators |
+| Demo script | 34 checks | docs/DEMO-SCRIPT.md performed click for click on three screens | Firestore + Auth emulators |
 
 ## 1. Unit tests — no emulator
 
@@ -148,6 +149,20 @@ offer, rating a completed purchase, notifications and the moderation queue.
 # emulators and demo users as in §5
 node scripts/seed-demo-data.mjs
 node web/test/demo-data.mjs
+```
+
+## 7. The demo script, as written
+
+`web/test/demo-script.mjs` performs docs/DEMO-SCRIPT.md exactly: the same
+clicks, the same typed text and the same order, on three screens (Riya signed
+out then in, Arjun, Meera). Step labels match the script's numbering, so a
+failure names the step that would break on stage. It also checks the moments
+the script promises happen live, with no reload: the new post appearing on
+the other screen, the claim count, chat replies, Returned and Sold.
+
+```bash
+node scripts/seed-demo-data.mjs --wipe-all   # emulator env vars set
+node web/test/demo-script.mjs
 ```
 
 ## Not covered

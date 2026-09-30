@@ -13,6 +13,9 @@ export default function ChatModal({
   onClose,
   item,
   currentUser,
+  // Who to talk to. Defaults to the post's owner; the owner reviewing a claim
+  // passes the claimant instead (you cannot message yourself).
+  target = null,
 }) {
   const [chatId, setChatId] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -30,8 +33,8 @@ export default function ChatModal({
     setLoading(true);
     setError('');
 
-    const targetUid = item.postedBy || item.sellerUid || 'poster-uid';
-    const targetName = item.reporter || item.sellerName || 'Student';
+    const targetUid = target?.uid || item.postedBy || item.sellerUid || 'poster-uid';
+    const targetName = target?.name || item.reporter || item.sellerName || 'Student';
 
     getOrCreateChat({
       targetUid,
@@ -52,7 +55,7 @@ export default function ChatModal({
       });
 
     return () => unsub();
-  }, [isOpen, item, currentUser]);
+  }, [isOpen, item, currentUser, target]);
 
   // Scroll to bottom when messages arrive
   useEffect(() => {
@@ -82,7 +85,7 @@ export default function ChatModal({
     }
   };
 
-  const otherName = item.reporter || item.sellerName || 'Student';
+  const otherName = target?.name || item.reporter || item.sellerName || 'Student';
 
   return (
     <div className="overlay" onClick={onClose} role="dialog" aria-modal="true" aria-label="Campus chat">
@@ -128,7 +131,7 @@ export default function ChatModal({
             <div>
               <div style={{ fontWeight: 700, fontSize: 'var(--text-sm)' }}>{otherName}</div>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-muted)' }}>
-                {item.dept ? `${item.dept} · ` : ''}Verified Student
+                {!target && item.dept ? `${item.dept} · ` : ''}Verified Student
               </div>
             </div>
           </div>
