@@ -16,9 +16,9 @@ import AIAssistantModal from './components/AIAssistantModal';
 import ProfileModal from './components/ProfileModal';
 import ModerationPanel from './components/ModerationPanel';
 import HowItWorks from './components/HowItWorks';
-import { INITIAL_ITEMS } from './data/mockData';
 import { useFeed } from './hooks/useFeed';
 import { addLostFound, addListing } from './lib/feed';
+import { subscribeMyClaims } from './lib/claims';
 import { findMatchesForItem } from './lib/matching';
 import { useAuth } from './auth/AuthContext';
 import AuthModal from './auth/AuthModal';
@@ -29,8 +29,11 @@ import { SearchX, PlusCircle, Compass, Users, Moon, Sun, Sparkles } from 'lucide
 export default function App() {
   const { isAuthed, isVerified, poster, user, redirectError } = useAuth();
   const { items: liveItems, loading, error } = useFeed();
-  // Fall back to mock data if the emulator/backend isn't reachable, so dev never breaks.
-  const baseItems = error || (!loading && liveItems.length === 0) ? INITIAL_ITEMS : liveItems;
+  // Always the real database. There used to be a fallback to hardcoded sample
+  // items when the feed was slow, failed or was empty; on the live site that
+  // made signed-out visitors see fake posts while signed-in users saw the real
+  // (different) ones. A failure now shows as a banner instead.
+  const baseItems = liveItems;
 
   // matchScore is normally written by the suggestMatches Cloud Function, which
   // needs the Blaze plan to deploy. Compute it in the client too so a freshly
@@ -63,6 +66,17 @@ export default function App() {
   const [isSmartMatchOpen, setIsSmartMatchOpen] = useState(false);
   const [isClaimsReviewOpen, setIsClaimsReviewOpen] = useState(false);
   const [isMyClaimsOpen, setIsMyClaimsOpen] = useState(false);
+  // itemId → status of the signed-in user's claim on it, so a card you have
+  // already claimed says so instead of inviting a duplicate claim.
+  const [myClaims, setMyClaims] = useState({});
+  useEffect(() => {
+    if (!user?.uid) { setMyClaims({}); return undefined; }
+    return subscribeMyClaims(
+      user.uid,
+      (rows) => setMyClaims(Object.fromEntries(rows.map((c) => [c.itemId, c.status]))),
+      () => setMyClaims({}) // index not deployed yet: cards fall back to "Claim this"
+    );
+  }, [user?.uid]);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isModerationOpen, setIsModerationOpen] = useState(false);
   const [toast, setToast] = useState('');
@@ -264,6 +278,14 @@ export default function App() {
           )}
         </div>
 
+        {error && (
+          <div role="alert" className="surface" style={{ padding: '12px 16px', marginBottom: 16, borderLeft: '3px solid var(--lost)', fontSize: 'var(--text-sm)' }}>
+            {error.message === 'Backend timeout'
+              ? 'Still connecting to the campus feed… posts appear as soon as it answers.'
+              : `Could not load the campus feed (${error.code || error.message}). Reload to try again.`}
+          </div>
+        )}
+
         {/* Loading / grid / empty */}
         {loading && !error ? (
           <div
@@ -287,9 +309,11 @@ export default function App() {
         ) : filtered.length === 0 ? (
           <div className="surface" style={{ padding: '60px 20px', textAlign: 'center', margin: '20px 0' }}>
             <SearchX size={44} color="var(--ink-muted)" style={{ margin: '0 auto 16px' }} />
-            <h3 style={{ fontSize: 'var(--text-md)', fontWeight: 700 }}>Nothing matches your filters</h3>
+            <h3 style={{ fontSize: 'var(--text-md)', fontWeight: 700 }}>
+              {items.length ? 'Nothing matches your filters' : 'No posts yet'}
+            </h3>
             <p style={{ color: 'var(--ink-secondary)', fontSize: 'var(--text-sm)', margin: '8px 0 20px' }}>
-              Try adjusting your search, location, or category.
+              {items.length ? 'Try adjusting your search, location, or category.' : 'Be the first to post a lost, found or for-sale item.'}
             </p>
             <button onClick={openPost} className="btn btn-primary">
               <PlusCircle size={16} /> Post the first report
@@ -311,6 +335,8 @@ export default function App() {
                 item={item}
                 index={i}
                 currentUid={user?.uid || null}
+                myClaim={myClaims[item.id] || null}
+                onOpenMyClaims={() => setIsMyClaimsOpen(true)}
                 onClaim={handleOpenClaim}
                 onReviewClaims={handleOpenClaimsReview}
                 onChat={handleOpenChat}

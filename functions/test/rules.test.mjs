@@ -89,7 +89,7 @@ test('an already-resolved claim cannot be flipped again', async () => {
 
 test('a verified student can still submit a claim', async () => {
   await seed();
-  await assertSucceeds(setDoc(doc(verified(STRANGER), 'lostFoundItems/item-1/claims/claim-2'),
+  await assertSucceeds(setDoc(doc(verified(STRANGER), `lostFoundItems/item-1/claims/${STRANGER}`),
     { claimantUid: STRANGER, proof: 'scratch on the base', status: 'pending' }));
 });
 
@@ -417,7 +417,7 @@ test('workflow: marking returned cannot smuggle in other field changes', async (
 
 test('workflow: a returned item takes no new claims', async () => {
   await seedWorkflow('resolved');
-  await assertFails(setDoc(doc(verified('uid-late'), 'lostFoundItems/item-1/claims/late'),
+  await assertFails(setDoc(doc(verified('uid-late'), 'lostFoundItems/item-1/claims/uid-late'),
     { claimantUid: 'uid-late', proof: 'mine too', status: 'pending' }));
 });
 
@@ -430,8 +430,34 @@ test('workflow: after return, a leftover claim can be declined but not approved'
 
 test('workflow: you cannot claim your own post', async () => {
   await seedWorkflow();
-  await assertFails(setDoc(doc(verified(OWNER), 'lostFoundItems/item-1/claims/self'),
+  await assertFails(setDoc(doc(verified(OWNER), `lostFoundItems/item-1/claims/${OWNER}`),
     { claimantUid: OWNER, proof: 'x', status: 'pending' }));
+});
+
+// --- one claim per person ---------------------------------------------------
+test('claims: one per person — a claim lives at your own uid, and only once', async () => {
+  await seedWorkflow();
+  const fs = verified('uid-new');
+  const mine = doc(fs, 'lostFoundItems/item-1/claims/uid-new');
+  // Checking your own empty slot is allowed (it reveals nothing).
+  await assertSucceeds(getDoc(mine));
+  await assertSucceeds(setDoc(mine, { claimantUid: 'uid-new', proof: 'first', status: 'pending' }));
+  // A second claim overwrites nothing: claimants cannot update.
+  await assertFails(setDoc(mine, { claimantUid: 'uid-new', proof: 'again', status: 'pending' }));
+  // Nor can you stack one under another id.
+  await assertFails(setDoc(doc(fs, 'lostFoundItems/item-1/claims/random-id'), { claimantUid: 'uid-new', proof: 'dup', status: 'pending' }));
+  // Nor peek at someone else's slot.
+  await assertFails(getDoc(doc(fs, `lostFoundItems/item-1/claims/${STRANGER}`)));
+});
+
+test('workflow: approving one claim declines the other pending ones in the same write', async () => {
+  await seedWorkflow();
+  const fs = verified(OWNER);
+  const b = writeBatch(fs);
+  b.update(doc(fs, CLAIM), { status: 'approved' });
+  b.update(doc(fs, 'lostFoundItems/item-1/claims/claim-9'), { status: 'rejected' });
+  b.update(doc(fs, ITEM), { status: 'resolved', resolvedClaimId: 'claim-1', resolvedAt: new Date() });
+  await assertSucceeds(b.commit());
 });
 
 // --- claim privacy ---------------------------------------------------------

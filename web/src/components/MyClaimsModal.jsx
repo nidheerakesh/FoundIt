@@ -6,6 +6,7 @@ const STATUS = {
   pending: { label: 'Waiting for them', cls: 'badge' },
   approved: { label: 'Approved', cls: 'badge badge-found' },
   rejected: { label: 'Declined', cls: 'badge badge-lost' },
+  closed: { label: 'Not chosen', cls: 'badge badge-neutral' },
 };
 
 /**
@@ -76,7 +77,8 @@ export default function MyClaimsModal({ isOpen, onClose, uid, items = [], onOpen
           claims.map((c) => {
             const item = byId.get(c.itemId);
             const returned = item?.status === 'resolved';
-            const st = STATUS[c.status] || STATUS.pending;
+            const closed = returned && c.status === 'pending';
+            const st = STATUS[closed ? 'closed' : c.status] || STATUS.pending;
             const verb = c.itemType === 'found' ? 'You said this is yours' : 'You said you found this';
             return (
               <div key={c.id} style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: 14, marginBottom: 10 }}>
@@ -92,8 +94,9 @@ export default function MyClaimsModal({ isOpen, onClose, uid, items = [], onOpen
                 <p style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-secondary)', margin: '8px 0 10px' }}>
                   {c.status === 'approved' && returned && 'Approved and marked returned. All done.'}
                   {c.status === 'approved' && !returned && 'Approved. Arrange the handover in chat.'}
-                  {c.status === 'rejected' && 'They declined this claim.'}
-                  {c.status === 'pending' && 'They have not decided yet. Message them if it is urgent.'}
+                  {c.status === 'rejected' && (returned ? 'They gave it to someone else.' : 'They declined this claim.')}
+                  {closed && 'It was returned to someone else.'}
+                  {c.status === 'pending' && !closed && 'They have not decided yet. Message them if it is urgent.'}
                 </p>
                 {item && c.status !== 'rejected' && !returned && (
                   <button type="button" className="btn btn-ghost btn-sm" onClick={() => { onClose(); onOpenChat?.(item); }}>

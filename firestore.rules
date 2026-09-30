@@ -68,9 +68,15 @@ service cloud.firestore {
         // only the poster who judges it, the claimant, and moderators may.
         allow read: if isMod()
           || (signedIn() && item().postedBy == request.auth.uid)
+          // resource == null: checking whether you have claimed yet (your own
+          // uid's slot) reveals nothing.
+          || (signedIn() && claimId == request.auth.uid && resource == null)
           || (signedIn() && resource.data.claimantUid == request.auth.uid);
-        // Not on your own post, and not once the item has been returned.
+        // Not on your own post, not once the item has been returned, and one
+        // per person: the claim's id is the claimant's uid, so a second claim
+        // would be an update, which claimants cannot make.
         allow create: if isVerified() && request.resource.data.claimantUid == request.auth.uid
+          && claimId == request.auth.uid
           && item().postedBy != request.auth.uid
           && item().status != 'resolved';
         // Approve/reject only (FR-10). The resolver moves the status and nothing

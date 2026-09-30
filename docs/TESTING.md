@@ -7,9 +7,9 @@ Nothing here talks to the live Firebase project.
 |---|---|---|---|
 | Unit — pure logic | 13 | Match and trust formulas, match fan-out decisions | nothing |
 | Integration — Cloud Functions | 28 | Every trigger and callable, against real Firestore | Firestore emulator |
-| Security rules | 56 | Every collection, from the client's side | Firestore emulator |
+| Security rules | 58 | Every collection, from the client's side | Firestore emulator |
 | Frontend smoke | 16 | The signed-out app in a real browser on live data | emulator + dev server |
-| User journeys | 58 checks | Three signed-in demo users driving every flow | Firestore + Auth emulators |
+| User journeys | 62 checks | Three signed-in demo users driving every flow | Firestore + Auth emulators |
 | Demo data | 18 checks | Every story the demo seed sets up can be played | Firestore + Auth emulators |
 
 ## 1. Unit tests — no emulator

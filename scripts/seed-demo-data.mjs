@@ -165,12 +165,14 @@ for (const [id, type, title, description, category, zone, who, hours, status = '
     // suggestMatches function is not deployed, and prefers it when it is.
     matchedWith: [], matchScore: null,
     createdAt: ago(hours),
-    ...(status === 'resolved' ? { resolvedClaimId: 'demo-claim', resolvedAt: ago(hours - 20) } : {}),
+    // Both returned items went back via Kabir's approved claim (seeded below).
+    ...(status === 'resolved' ? { resolvedClaimId: P.kabir.uid, resolvedAt: ago(hours - 20) } : {}),
   });
 }
 
 const claim = (itemId, who, item, proof, meetingSpot, status, hours) =>
-  db.doc(`lostFoundItems/${itemId}/claims/demo-claim`).set({
+  // A claim's id is its claimant's uid: one claim per person per item.
+  db.doc(`lostFoundItems/${itemId}/claims/${who.uid}`).set({
     claimantUid: who.uid, claimantName: who.name, claimantDept: who.dept, claimantVerified: true,
     itemTitle: item.title, itemType: item.type,
     message: '', proof, meetingSpot, status, createdAt: ago(hours),
