@@ -22,7 +22,7 @@ export default function ClaimModal({ isOpen, onClose, item, user, onClaimSuccess
     setBusy(true);
     setError('');
     try {
-      await submitClaim(item.id, { proof, message, meetingSpot }, user);
+      await submitClaim(item, { proof, message, meetingSpot }, user);
       setSubmitted(true);
       onClaimSuccess?.(`Claim submitted for "${item.title}". The poster will review your proof.`);
     } catch (err) {
@@ -94,7 +94,8 @@ export default function ClaimModal({ isOpen, onClose, item, user, onClaimSuccess
               Verification Claim Sent!
             </h3>
             <p style={{ color: 'var(--ink-secondary)', fontSize: 'var(--text-sm)', marginBottom: 20 }}>
-              {item.reporter} has received your verification details. You can also send a direct in-app message to coordinate.
+              Your details are attached to {item.reporter}&rsquo;s post and visible only to them.
+              Follow it under <strong>My claims</strong> in your account menu, and message them to arrange the handover.
             </p>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
               <button

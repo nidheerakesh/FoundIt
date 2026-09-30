@@ -2,14 +2,22 @@
   "name": "foundit-functions",
   "description": "FoundIt Cloud Functions — matching, trust, roles",
   "main": "index.js",
-  "engines": { "node": "22" },
+  "engines": {
+    "node": "22"
+  },
   "scripts": {
     "serve": "firebase emulators:start --only functions,firestore,auth",
-    "test": "node --test"
+    "test": "node --test src/*.test.js",
+    "test:rules": "node --test test/rules.test.mjs",
+    "test:triggers": "node --test test/triggers.test.mjs"
   },
   "dependencies": {
     "firebase-admin": "^12.7.0",
     "firebase-functions": "^6.1.0"
   },
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^4.0.1",
+    "firebase": "^11.0.0"
+  }
 }

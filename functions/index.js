@@ -7,6 +7,7 @@ const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getAuth } = require('firebase-admin/auth');
 const { matchScore, trustScore } = require('./src/scoring');
+const { mirrorMatches } = require('./src/fanout');
 
 initializeApp();
 setGlobalOptions({ region: 'us-central1', maxInstances: 10 });
@@ -31,6 +32,29 @@ async function notify(userId, type, message, contextRef = null) {
     read: false,
     createdAt: FieldValue.serverTimestamp(),
   });
+}
+
+/**
+ * Build the zone adjacency map the match score needs (docs/SCORING.md §2.1).
+ * campusZones is admin-owned reference data (FR-24); items store the zone's
+ * display name in `zoneId`, so the map is keyed by name with the doc id as a
+ * fallback. An empty/absent collection yields {} — scoring then falls back to
+ * exact-zone matching, which is what happened before this was wired up.
+ */
+async function loadZoneAdjacency() {
+  try {
+    const snap = await db.collection('campusZones').get();
+    const map = {};
+    snap.forEach((d) => {
+      const z = d.data();
+      const key = z.name || d.id;
+      map[key] = Array.isArray(z.adjacent) ? z.adjacent : [];
+    });
+    return map;
+  } catch (err) {
+    console.warn('[FoundIt] campusZones unreadable, falling back to exact-zone matching:', err.message);
+    return {};
+  }
 }
 
 /** Recompute a user's trust score from their profile counters (docs/SCORING.md §1). */
@@ -82,19 +106,39 @@ exports.suggestMatches = onDocumentWritten('lostFoundItems/{itemId}', async (eve
     .where('status', 'in', ['open', 'matched'])
     .get();
 
+  const zoneAdjacency = await loadZoneAdjacency();
+
   const scored = [];
   for (const doc of snap.docs) {
     if (doc.id === itemId) continue;
     const cand = doc.data();
     if (cand.postedBy && cand.postedBy === item.postedBy) continue;
-    const score = matchScore(item, cand);
-    if (score >= MATCH_THRESHOLD) scored.push({ id: doc.id, score });
+    const score = matchScore(item, cand, zoneAdjacency);
+    if (score >= MATCH_THRESHOLD) scored.push({ id: doc.id, score, data: cand, ref: doc.ref });
   }
   scored.sort((a, b) => b.score - a.score);
   const top = scored.slice(0, 5);
 
   const nextMatched = top.map((s) => s.id);
   const nextScore = top.length ? top[0].score : null;
+
+  // A match belongs to both reports (ARCHITECTURE.md §4.8 — "New match found →
+  // Both item posters"). This trigger only ever fires for the document that
+  // changed, so without mirroring, whoever posted second was the only side told.
+  // mirrorMatches (src/fanout.js) decides what to write and who to announce to;
+  // these writes touch no MATCH_FIELDS, so the loop guard above makes the
+  // trigger they fire a no-op.
+  //
+  // This runs before the `settled` bail-out below on purpose: whether *this*
+  // item still needs writing says nothing about whether its counterparts do.
+  const refById = new Map(top.map((m) => [m.id, m.ref]));
+  for (const action of mirrorMatches(itemId, top)) {
+    await refById.get(action.id).set(action.update, { merge: true });
+    if (action.notify) {
+      const { uid, title, score } = action.notify;
+      await notify(uid, 'match', `A possible match for "${title}" was found (${score}%).`, action.id);
+    }
+  }
 
   // This function writes `status`, which is itself a match input, so its own
   // write re-fires this trigger. Bail out when the recomputed result already
@@ -123,6 +167,34 @@ exports.suggestMatches = onDocumentWritten('lostFoundItems/{itemId}', async (eve
   if (top.length && !hadMatch) {
     await notify(item.postedBy, 'match', `A possible match for "${item.title}" was found (${top[0].score}%).`, itemId);
   }
+
+});
+
+// ---------------------------------------------------------------------------
+// onClaimCreated — tell the finder someone has claimed their item
+// ---------------------------------------------------------------------------
+// ARCHITECTURE.md §4.8 lists "Claim submitted → Item owner". Without this the
+// claim landed in Firestore and nothing ever surfaced it to the person who has
+// to approve it, so FR-10 could not complete.
+exports.onClaimCreated = onDocumentCreated('lostFoundItems/{itemId}/claims/{claimId}', async (event) => {
+  const claim = event.data?.data();
+  if (!claim) return;
+
+  const itemId = event.params.itemId;
+  const itemSnap = await db.collection('lostFoundItems').doc(itemId).get();
+  if (!itemSnap.exists) return;
+  const item = itemSnap.data();
+
+  // Nothing to tell you about your own claim on your own post.
+  if (!item.postedBy || item.postedBy === claim.claimantUid) return;
+
+  const who = claim.claimantName || 'A student';
+  await notify(
+    item.postedBy,
+    'claim',
+    `${who} claimed "${item.title}". Review their proof to approve or reject.`,
+    itemId
+  );
 });
 
 // ---------------------------------------------------------------------------

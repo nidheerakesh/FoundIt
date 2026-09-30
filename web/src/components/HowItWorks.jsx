@@ -1,40 +1,42 @@
-import { ShieldCheck, Search, Handshake, Star, Sparkles, Bell } from 'lucide-react';
+import { Megaphone, Search, ShieldCheck, ListChecks, CheckCircle2, ClipboardList } from 'lucide-react';
 
+// The lost → found workflow, step by step. Nothing here relies on push
+// notifications: every state is visible on the cards when you open the app.
 const STEPS = [
   {
-    icon: ShieldCheck,
-    title: 'Verified accounts',
-    desc: 'Only campus emails can sign up. Every poster is verified — no anonymous reports.',
-    color: 'var(--accent)',
-  },
-  {
-    icon: Search,
-    title: 'Smart matching',
-    desc: 'AI pairs lost items with found reports using category, keywords, location, and timing.',
-    color: 'var(--warn)',
-  },
-  {
-    icon: Handshake,
-    title: 'Secure handshake',
-    desc: 'Both parties confirm the exchange. Reviews unlock only after a completed transaction.',
-    color: 'var(--market)',
-  },
-  {
-    icon: Star,
-    title: 'Trust scoring',
-    desc: 'Bayesian trust score (0–100) rewards good behavior and penalizes fraud. Visible on every post.',
-    color: 'var(--found)',
-  },
-  {
-    icon: Bell,
-    title: 'Real-time alerts',
-    desc: 'Get notified instantly when your lost item gets a match, claim, or review.',
+    icon: Megaphone,
+    title: '1. Post it',
+    desc: 'Lost something? Post it as Lost. Found something? Post it as Found — or open the Lost post and tap "I found it".',
     color: 'var(--lost)',
   },
   {
-    icon: Sparkles,
-    title: 'AI-powered',
-    desc: 'Auto-fill posts, smart search, and AI suggestions to help you find things faster.',
+    icon: Search,
+    title: '2. Spot the match',
+    desc: 'When a Lost and a Found report look alike, both cards show a % match badge. Tap it to compare them side by side.',
+    color: 'var(--warn)',
+  },
+  {
+    icon: ShieldCheck,
+    title: '3. Claim with proof',
+    desc: 'On a Found post, tap "Claim this" and describe something only the owner would know. Your answer is private to the poster.',
+    color: 'var(--accent)',
+  },
+  {
+    icon: ListChecks,
+    title: '4. The poster reviews',
+    desc: 'Their own card shows "Review claims (N)". They read the proof, message you to arrange a campus handover, and approve.',
+    color: 'var(--market)',
+  },
+  {
+    icon: CheckCircle2,
+    title: '5. Returned',
+    desc: 'Approving marks the item Returned for everyone and closes the report, so nobody else can claim it.',
+    color: 'var(--found)',
+  },
+  {
+    icon: ClipboardList,
+    title: 'Track it',
+    desc: 'Claimed something? Check "My claims" in your account menu — pending, approved or declined, and whether it is returned.',
     color: '#a78bfa',
   },
 ];
@@ -46,9 +48,9 @@ export default function HowItWorks() {
         padding: '24px 28px', borderRadius: 'var(--radius-lg)',
         background: 'var(--surface)', border: '1px solid var(--border)',
       }}>
-        <h2 style={{ fontSize: 'var(--text-md)', fontWeight: 800, marginBottom: 4 }}>How FoundIt works</h2>
+        <h2 style={{ fontSize: 'var(--text-md)', fontWeight: 800, marginBottom: 4 }}>How getting something back works</h2>
         <p style={{ fontSize: 'var(--text-sm)', color: 'var(--ink-muted)', marginBottom: 20 }}>
-          Built for trust, speed, and campus safety.
+          From "I lost it" to "I got it back", entirely inside FoundIt.
         </p>
         <div style={{
           display: 'grid',

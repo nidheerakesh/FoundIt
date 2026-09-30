@@ -29,9 +29,15 @@ function timeAgo(ms) {
 const createdMs = (d) => (d?.createdAt?.toMillis ? d.createdAt.toMillis() : d?.createdAt || 0);
 
 /** lostFoundItems doc → UI card */
-function lostFoundToCard(id, d) {
+function lostFoundToCard(id, d, meta) {
   return {
     id,
+    // True while this is still a local write the server has not acknowledged.
+    // Anything that queries under the item (its claims) must wait for false:
+    // the claims rule reads the item on the server, and a listen rejected
+    // mid-setup trips an internal assertion in the Firestore SDK that leaves
+    // the client wedged until reload.
+    pending: !!meta?.hasPendingWrites,
     type: d.type, // 'lost' | 'found'
     title: d.title,
     category: d.category,
@@ -43,6 +49,11 @@ function lostFoundToCard(id, d) {
     verified: !!d.verified,
     trustScore: d.trustScore ?? 50,
     matchScore: d.matchScore ?? null,
+    matchedWith: d.matchedWith || [],
+    // Needed so the UI can tell the poster apart from everyone else: the poster
+    // reviews claims (FR-10), everyone else submits them.
+    postedBy: d.postedBy || null,
+    status: d.status || 'open',
     tags: d.keywords || [],
     imageURL: d.imageURLs?.[0] || null,
     _sort: createdMs(d),
@@ -66,6 +77,12 @@ function listingToCard(id, d) {
     price: d.price ?? 0,
     listingType: PRICE_TO_LISTING[d.priceType] || 'Sell',
     condition: d.condition || '',
+    // The handshake needs these: who sells, who offered, who has confirmed.
+    // Without sellerUid the review had no real person to rate.
+    sellerUid: d.sellerUid || null,
+    status: d.status || 'active',
+    lastOffer: d.lastOffer || null,
+    confirmations: d.confirmations || {},
     tags: d.keywords || [],
     imageURL: d.imageURLs?.[0] || null,
     _sort: createdMs(d),
@@ -83,7 +100,9 @@ export function subscribeFeed(cb, onError = () => {}) {
 
   const unsubLf = onSnapshot(
     query(collection(db, COL.lostFoundItems), orderBy('createdAt', 'desc')),
-    (snap) => { lf = snap.docs.map((doc) => lostFoundToCard(doc.id, doc.data())); emit(); },
+    // Metadata changes too, so a card learns when its write has been acked.
+    { includeMetadataChanges: true },
+    (snap) => { lf = snap.docs.map((doc) => lostFoundToCard(doc.id, doc.data(), doc.metadata)); emit(); },
     onError
   );
   const unsubLs = onSnapshot(
@@ -99,8 +118,27 @@ function deriveKeywords(...parts) {
   return [...new Set(parts.join(' ').toLowerCase().match(/[a-z0-9]{3,}/g) || [])].slice(0, 12);
 }
 
+/**
+ * The denormalised poster fields every feed write carries. Firestore rejects a
+ * whole document with `invalid-argument` if any field is `undefined`, so one
+ * missing optional display field (a profile without a department, say) would
+ * otherwise block the post entirely with an unhelpful error. Defaults here keep
+ * the write valid; `uid` is the only field that must be real.
+ */
+function posterFields(poster) {
+  if (!poster?.uid) throw new Error('Sign in to post.');
+  return {
+    uid: poster.uid,
+    name: poster.name || 'Student',
+    dept: poster.dept || '',
+    verified: !!poster.verified,
+    trustScore: poster.trustScore ?? 50,
+  };
+}
+
 /** Write a lost/found report. `poster` carries the denormalized display fields. */
 export async function addLostFound(form, poster) {
+  const who = posterFields(poster);
   return addDoc(collection(db, COL.lostFoundItems), {
     type: form.type, // 'lost' | 'found'
     title: form.title,
@@ -111,11 +149,11 @@ export async function addLostFound(form, poster) {
     location: form.location,
     imageURLs: [],
     status: 'open',
-    postedBy: poster.uid,
-    reporterName: poster.name,
-    dept: poster.dept,
-    verified: poster.verified,
-    trustScore: poster.trustScore,
+    postedBy: who.uid,
+    reporterName: who.name,
+    dept: who.dept,
+    verified: who.verified,
+    trustScore: who.trustScore,
     matchedWith: [],
     matchScore: null,
     createdAt: serverTimestamp(),
@@ -124,6 +162,7 @@ export async function addLostFound(form, poster) {
 
 /** Write a marketplace listing. */
 export async function addListing(form, poster) {
+  const who = posterFields(poster);
   return addDoc(collection(db, COL.listings), {
     title: form.title,
     description: form.description,
@@ -135,11 +174,11 @@ export async function addListing(form, poster) {
     location: form.location,
     imageURLs: [],
     status: 'active',
-    sellerUid: poster.uid,
-    sellerName: poster.name,
-    dept: poster.dept,
-    verified: poster.verified,
-    trustScore: poster.trustScore,
+    sellerUid: who.uid,
+    sellerName: who.name,
+    dept: who.dept,
+    verified: who.verified,
+    trustScore: who.trustScore,
     createdAt: serverTimestamp(),
   });
 }

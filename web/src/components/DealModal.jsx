@@ -16,7 +16,10 @@ export default function DealModal({
   const [meetupSpot, setMeetupSpot] = useState('Central Mess & Canteen');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
-  const [step, setStep] = useState('offer'); // 'offer' | 'review' | 'done'
+  // offer → confirm → (waiting) → review → done. Confirming and reviewing are
+  // separate steps: a review is only allowed once BOTH parties have confirmed
+  // and the listing is sold, so chaining them in one click could never succeed.
+  const [step, setStep] = useState('offer');
   const [rating, setRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
   const [error, setError] = useState('');
@@ -28,6 +31,19 @@ export default function DealModal({
     } else {
       setFraudAnalysis(null);
     }
+  }, [isOpen, listing?.id]);
+
+  const uid = currentUser?.uid;
+  const isSeller = !!uid && listing?.sellerUid === uid;
+  const isOfferingBuyer = !!uid && listing?.lastOffer?.buyerUid === uid;
+
+  useEffect(() => {
+    if (!isOpen || !listing) return;
+    setError('');
+    if (listing.status === 'sold') setStep(isOfferingBuyer ? 'review' : 'done');
+    else if (isSeller) setStep(listing.lastOffer ? 'confirm' : 'noOffer');
+    else if (isOfferingBuyer) setStep(listing.confirmations?.buyer ? 'waiting' : 'confirm');
+    else setStep('offer');
   }, [isOpen, listing?.id]);
 
   if (!isOpen || !listing) return null;
@@ -49,10 +65,30 @@ export default function DealModal({
         },
         currentUser
       );
-      setStep('review');
-      onDealSuccess?.(`Deal handshake proposed for "${listing.title}"!`);
+      setStep('confirm');
+      onDealSuccess?.(`Offer sent for "${listing.title}". Confirm once you have met.`);
     } catch (err) {
       setError(err.message || 'Failed to submit deal proposal.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleConfirm = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const res = await confirmDeal(listing.id, uid);
+      if (res?.status === 'sold') {
+        // Only the buyer reviews here; the seller is done.
+        setStep(isSeller ? 'done' : 'review');
+        onDealSuccess?.(`Deal complete — "${listing.title}" is sold.`);
+      } else {
+        setStep('waiting');
+        onDealSuccess?.('Confirmed. Waiting for the other party.');
+      }
+    } catch (err) {
+      setError(err.message || 'Could not confirm the deal.');
     } finally {
       setBusy(false);
     }
@@ -63,22 +99,17 @@ export default function DealModal({
     setBusy(true);
     setError('');
     try {
-      const sellerUid = listing.sellerUid || 'seed-user';
-      // Confirm the deal (server marks it sold once both parties confirm).
-      await confirmDeal(listing.id);
+      if (!listing.sellerUid) throw new Error('This listing has no seller on record.');
       await submitReview(
-        {
-          listingId: listing.id,
-          sellerUid,
-          rating,
-          comment: reviewComment,
-        },
+        { listingId: listing.id, sellerUid: listing.sellerUid, rating, comment: reviewComment },
         currentUser
       );
       setStep('done');
-      onDealSuccess?.(`Deal completed and review saved for ${listing.reporter}!`);
+      onDealSuccess?.(`Review saved for ${listing.reporter}.`);
     } catch (err) {
-      setError(err.message || 'Failed to record review.');
+      setError(err.code === 'permission-denied'
+        ? 'You have already reviewed this deal.'
+        : err.message || 'Failed to record review.');
     } finally {
       setBusy(false);
     }
@@ -235,13 +266,71 @@ export default function DealModal({
           </form>
         )}
 
+        {step === 'noOffer' && (
+          <div style={{ textAlign: 'center', padding: '20px 0' }}>
+            <h3 style={{ fontSize: 'var(--text-md)', fontWeight: 700, marginBottom: 6 }}>This is your listing</h3>
+            <p style={{ color: 'var(--ink-secondary)', fontSize: 'var(--text-sm)' }}>
+              No offers yet. When a buyer makes one, you will confirm the sale here.
+            </p>
+          </div>
+        )}
+
+        {step === 'confirm' && (
+          <div>
+            <div style={{ background: 'var(--surface-raised)', borderRadius: 'var(--radius-md)', padding: '12px 14px', marginBottom: 14, fontSize: 'var(--text-sm)' }}>
+              {isSeller ? (
+                <>
+                  <div style={{ fontWeight: 700 }}>{listing.lastOffer?.buyerName || 'A student'} offered ₹{listing.lastOffer?.price ?? 0}</div>
+                  <div style={{ color: 'var(--ink-muted)', fontSize: 'var(--text-xs)', marginTop: 2 }}>
+                    Meet at {listing.lastOffer?.meetupSpot || 'a campus zone'}
+                    {listing.lastOffer?.message ? ` · "${listing.lastOffer.message}"` : ''}
+                  </div>
+                </>
+              ) : (
+                <div style={{ fontWeight: 700 }}>Offer sent to {listing.reporter}</div>
+              )}
+            </div>
+            <p style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-secondary)', marginBottom: 14 }}>
+              Confirm only after you have met and exchanged the item. The listing is marked sold once
+              <strong> both</strong> of you confirm — neither side can do it alone.
+            </p>
+            {error && (
+              <div style={{ color: 'var(--lost)', background: 'rgba(220, 38, 38, 0.1)', padding: 8, borderRadius: 6, fontSize: 'var(--text-xs)', marginBottom: 12 }}>
+                {error}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button type="button" className="btn btn-ghost btn-sm" style={{ flex: 1 }}
+                onClick={() => { onClose(); onOpenChat?.(listing); }}>
+                <Send size={14} /> Open chat
+              </button>
+              <button type="button" className="btn btn-success btn-sm" style={{ flex: 1 }} disabled={busy} onClick={handleConfirm}>
+                <Handshake size={14} /> {busy ? 'Confirming…' : isSeller ? 'Confirm sale' : 'Confirm deal'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === 'waiting' && (
+          <div style={{ textAlign: 'center', padding: '20px 0' }}>
+            <CheckCircle size={36} color="var(--found)" style={{ margin: '0 auto 8px' }} />
+            <h3 style={{ fontSize: 'var(--text-md)', fontWeight: 700, marginBottom: 6 }}>You have confirmed</h3>
+            <p style={{ color: 'var(--ink-secondary)', fontSize: 'var(--text-sm)', marginBottom: 16 }}>
+              Waiting for {isSeller ? 'the buyer' : listing.reporter} to confirm. It is marked sold once both of you have.
+            </p>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => { onClose(); onOpenChat?.(listing); }}>
+              <Send size={14} /> Message them
+            </button>
+          </div>
+        )}
+
         {step === 'review' && (
           <form onSubmit={handleCompleteAndReview}>
             <div style={{ textAlign: 'center', marginBottom: 16 }}>
               <CheckCircle size={36} color="var(--found)" style={{ margin: '0 auto 8px' }} />
-              <h3 style={{ fontSize: 'var(--text-md)', fontWeight: 700 }}>Deal Handshake Initiated!</h3>
+              <h3 style={{ fontSize: 'var(--text-md)', fontWeight: 700 }}>Deal complete — it&apos;s sold</h3>
               <p style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-secondary)', marginTop: 4 }}>
-                Once you meet and exchange the item, submit a review to boost {listing.reporter}&apos;s verified campus trust score.
+                Both of you confirmed. Rate {listing.reporter} to build their campus trust score.
               </p>
             </div>
 
@@ -304,7 +393,7 @@ export default function DealModal({
                 style={{ flex: 1 }}
                 disabled={busy}
               >
-                {busy ? 'Saving review…' : 'Mark Sold & Review'}
+                {busy ? 'Saving review…' : 'Submit review'}
               </button>
             </div>
           </form>
@@ -317,7 +406,7 @@ export default function DealModal({
               Transaction Complete!
             </h3>
             <p style={{ color: 'var(--ink-secondary)', fontSize: 'var(--text-sm)', marginBottom: 18 }}>
-              Listing has been marked as Sold and your review has been saved to the campus trust network.
+              The listing is marked sold. Thanks for trading on campus.
             </p>
             <button type="button" className="btn btn-primary btn-sm" onClick={onClose}>
               Done

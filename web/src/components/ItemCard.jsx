@@ -1,4 +1,6 @@
-import { MapPin, Clock, Sparkles, MessageCircle, Handshake, Flag, Package } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { MapPin, Clock, Sparkles, MessageCircle, Handshake, Flag, Package, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { subscribePendingCount } from '../lib/claims';
 import TrustBadge from './TrustBadge';
 
 const TYPE_BADGE = {
@@ -9,9 +11,24 @@ const TYPE_BADGE = {
 
 const LISTING_LABEL = { Sell: 'Sell', Rent: 'For Rent', Giveaway: 'Free' };
 
-export default function ItemCard({ item, index = 0, onClaim, onChat, onHandshake, onFlag, onSmartMatch }) {
+export default function ItemCard({ item, index = 0, currentUid = null, onClaim, onChat, onHandshake, onFlag, onSmartMatch, onReviewClaims }) {
   const badge = TYPE_BADGE[item.type] ?? TYPE_BADGE.marketplace;
   const isMarket = item.type === 'marketplace';
+  // Mock/demo cards carry no postedBy, so this is false for them — they stay claimable.
+  const isOwn = !!currentUid && (item.postedBy || item.sellerUid) === currentUid;
+  const isSold = isMarket && item.status === 'sold';
+  const boughtIt = isSold && !!currentUid && item.lastOffer?.buyerUid === currentUid;
+  const hasOffer = isMarket && !!item.lastOffer;
+  const isReturned = !isMarket && item.status === 'resolved';
+
+  // Your own open report shows how many claims are waiting on you. This is
+  // the workflow's replacement for a notification: you see it when you look.
+  const [pending, setPending] = useState(0);
+  useEffect(() => {
+    // Wait until the server has the item — see `pending` in lib/feed.js.
+    if (!isOwn || isMarket || isReturned || item.pending) return undefined;
+    return subscribePendingCount(item.id, setPending);
+  }, [isOwn, isMarket, isReturned, item.pending, item.id]);
 
   const priceLabel = isMarket
     ? item.listingType === 'Giveaway' || item.price === 0
@@ -44,7 +61,9 @@ export default function ItemCard({ item, index = 0, onClaim, onChat, onHandshake
             <span className="badge badge-neutral">{LISTING_LABEL[item.listingType]}</span>
           )}
         </div>
-        {item.matchScore && (
+        {isReturned ? (
+          <span className="badge badge-found"><CheckCircle2 size={12} /> Returned</span>
+        ) : item.matchScore && (
           <button
             onClick={() => onSmartMatch?.(item)}
             className="badge badge-match"
@@ -106,9 +125,34 @@ export default function ItemCard({ item, index = 0, onClaim, onChat, onHandshake
 
       {/* Actions */}
       <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-        {isMarket ? (
+        {boughtIt ? (
+          // The buyer reviews after the sale — whichever side confirmed last.
+          <button className="btn btn-primary btn-sm" style={{ flex: 1 }} onClick={() => onHandshake?.(item)}>
+            <Handshake size={15} /> Sold · Rate seller
+          </button>
+        ) : isSold ? (
+          <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} disabled>
+            Sold
+          </button>
+        ) : isReturned ? (
+          <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} disabled>
+            <CheckCircle2 size={15} /> Returned to owner
+          </button>
+        ) : isMarket && isOwn ? (
+          // Your own listing: you confirm a buyer's offer, you do not make one.
+          <button className="btn btn-success btn-sm" style={{ flex: 1 }} disabled={!hasOffer}
+            onClick={() => onHandshake?.(item)}>
+            <Handshake size={15} /> {hasOffer ? 'Confirm sale' : 'No offers yet'}
+          </button>
+        ) : isMarket ? (
           <button className="btn btn-success btn-sm" style={{ flex: 1 }} onClick={() => onHandshake?.(item)}>
             <Handshake size={15} /> Make a deal
+          </button>
+        ) : isOwn ? (
+          // You cannot claim your own report — this is the resolving side of it.
+          <button className={`btn btn-sm ${pending ? 'btn-primary' : 'btn-ghost'}`} style={{ flex: 1 }}
+            onClick={() => onReviewClaims?.(item)}>
+            <ShieldCheck size={15} /> {pending ? `Review claims (${pending})` : 'No claims yet'}
           </button>
         ) : (
           <button className="btn btn-primary btn-sm" style={{ flex: 1 }} onClick={() => onClaim?.(item)}>
