@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { X, ShieldAlert, Gavel, Check, Inbox } from 'lucide-react';
 import { subscribeOpenFlags, resolveFlag, TARGET_LABEL } from '../lib/moderation';
+import { useAuth } from '../auth/AuthContext';
 
 /**
  * Moderator/admin flag queue. Rendering is gated by the caller on role, but
@@ -12,6 +13,7 @@ export default function ModerationPanel({ isOpen, onClose, onToast }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState(null);
+  const { user } = useAuth();
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -33,17 +35,26 @@ export default function ModerationPanel({ isOpen, onClose, onToast }) {
 
   if (!isOpen) return null;
 
-  const act = async (flagId, action) => {
-    setBusyId(flagId);
+  const act = async (flag, action) => {
+    setBusyId(flag.id);
     setError('');
     try {
-      await resolveFlag(flagId, action);
-      onToast?.(action === 'strike' ? 'Strike applied and flag resolved.' : 'Flag dismissed.');
+      const { struck } = await resolveFlag(flag, action, user?.uid || null);
+      // Removing a post settles every other report about it too.
+      if (action === 'strike') {
+        for (const other of flags.filter((o) => o.id !== flag.id && o.targetId === flag.targetId)) {
+          await resolveFlag(other, 'dismiss', user?.uid || null).catch(() => {});
+        }
+      }
+      onToast?.(
+        action === 'dismiss' ? 'Flag dismissed.'
+          : struck ? 'Post removed and a strike applied to its owner.'
+          : 'Post removed from the feed.'
+      );
     } catch (err) {
-      // functions/not-found means the backend was never deployed.
       setError(
-        err.code === 'functions/not-found'
-          ? 'Moderation functions are not deployed for this project.'
+        err.code === 'permission-denied'
+          ? 'Your account does not have moderator access.'
           : err.message || 'Could not resolve the flag.'
       );
     } finally {
@@ -112,7 +123,7 @@ export default function ModerationPanel({ isOpen, onClose, onToast }) {
                   type="button"
                   className="btn btn-sm"
                   disabled={busyId === f.id}
-                  onClick={() => act(f.id, 'dismiss')}
+                  onClick={() => act(f, 'dismiss')}
                   style={{ background: 'var(--surface)', color: 'var(--ink)', border: '1px solid var(--border)' }}
                 >
                   <Check size={14} /> Dismiss
@@ -121,10 +132,10 @@ export default function ModerationPanel({ isOpen, onClose, onToast }) {
                   type="button"
                   className="btn btn-sm"
                   disabled={busyId === f.id}
-                  onClick={() => act(f.id, 'strike')}
+                  onClick={() => act(f, 'strike')}
                   style={{ background: 'var(--lost)', color: '#fff' }}
                 >
-                  <Gavel size={14} /> {busyId === f.id ? 'Working…' : 'Strike poster'}
+                  <Gavel size={14} /> {busyId === f.id ? 'Working…' : 'Remove post'}
                 </button>
               </div>
             </div>

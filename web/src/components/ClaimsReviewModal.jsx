@@ -6,6 +6,9 @@ const STATUS_BADGE = {
   pending: { label: 'Pending', className: 'badge' },
   approved: { label: 'Approved', className: 'badge badge-found' },
   rejected: { label: 'Declined', className: 'badge badge-lost' },
+  // Still pending on an item already returned to someone else (claims made
+  // before approvals started declining the rest).
+  closed: { label: 'Not chosen', className: 'badge badge-neutral' },
 };
 
 /**
@@ -40,7 +43,8 @@ export default function ClaimsReviewModal({ isOpen, onClose, item, onToast, onOp
     setBusyId(claimId);
     setError('');
     try {
-      await resolveClaim(item.id, claimId, status);
+      const others = claims.filter((c) => c.status === 'pending' && c.id !== claimId).map((c) => c.id);
+      await resolveClaim(item.id, claimId, status, others);
       onToast?.(
         status === 'approved'
           ? `"${item.title}" is marked returned. They will see it under My claims.`
@@ -64,9 +68,10 @@ export default function ClaimsReviewModal({ isOpen, onClose, item, onToast, onOp
   const approveHint = isFoundPost
     ? 'Approve when their proof matches something only the owner would know — then hand it over.'
     : 'Approve once you have your item back.';
-  const pending = claims.filter((c) => c.status === 'pending');
-  const settled = claims.filter((c) => c.status !== 'pending');
   const resolved = item.status === 'resolved';
+  // The winner first, then anyone still waiting, then the declined.
+  const rank = { approved: 0, pending: 1, rejected: 2 };
+  const ordered = [...claims].sort((a, b) => (rank[a.status] ?? 1) - (rank[b.status] ?? 1));
 
   return (
     <div className="overlay" onClick={onClose} role="dialog" aria-modal="true" aria-label="Review claims">
@@ -143,8 +148,9 @@ export default function ClaimsReviewModal({ isOpen, onClose, item, onToast, onOp
           </div>
         ) : (
           <>
-            {[...pending, ...settled].map((c) => {
-              const badge = STATUS_BADGE[c.status] || STATUS_BADGE.pending;
+            {ordered.map((c) => {
+              const shown = resolved && c.status === 'pending' ? 'closed' : c.status;
+              const badge = STATUS_BADGE[shown] || STATUS_BADGE.pending;
               return (
                 <div
                   key={c.id}
@@ -219,7 +225,7 @@ export default function ClaimsReviewModal({ isOpen, onClose, item, onToast, onOp
                     <button
                       type="button"
                       className="btn btn-ghost btn-sm"
-                      onClick={() => { onClose(); onOpenChat?.(item); }}
+                      onClick={() => { onClose(); onOpenChat?.(item, { uid: c.claimantUid, name: c.claimantName || 'Student' }); }}
                     >
                       <MessageSquare size={14} /> Message
                     </button>
@@ -228,7 +234,7 @@ export default function ClaimsReviewModal({ isOpen, onClose, item, onToast, onOp
               );
             })}
             <p style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-muted)', marginTop: 4 }}>
-              {approveHint} Approving closes the report for everyone; message them first to arrange the handover.
+              {approveHint} Approving closes the report for everyone and declines the other claims; message them first to arrange the handover.
             </p>
           </>
         )}

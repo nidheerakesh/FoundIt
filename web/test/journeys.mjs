@@ -116,19 +116,33 @@ await arjun.keyboard.press('Enter');
 await arjun.waitForTimeout(2000);
 const chat = await text(dlg(arjun));
 step(/library desk at 4/.test(chat) && !/insufficient/i.test(chat), 'message sends and shows in the thread');
+await reload(arjun);
+step(/Claim sent/.test(await text(card(arjun, 'Blue Stainless Water Bottle'))), 'the claimant’s card now reads "Claim sent", not another claim button');
+// A second person answers the same post, so approval has someone to turn down.
+await reload(meera);
+await card(meera, 'Blue Stainless Water Bottle').getByRole('button', { name: /i found it/i }).click();
+await meera.waitForTimeout(700);
+await dlg(meera).locator('textarea').first().fill('Saw a blue bottle at the canteen, might be it.');
+await dlg(meera).getByRole('button', { name: /submit claim/i }).click();
+await meera.waitForTimeout(2500);
+await reload(meera);
 await reload(riya);
-step(/Review claims \(1\)/.test(await text(card(riya, 'Blue Stainless Water Bottle'))),
-  'the owner sees "Review claims (1)" on their card — no notification needed');
+step(/Review claims \(2\)/.test(await text(card(riya, 'Blue Stainless Water Bottle'))),
+  'the owner sees "Review claims (2)" on their card — no notification needed');
 await guard('open Review claims', () => card(riya, 'Blue Stainless Water Bottle').getByRole('button', { name: /review claims/i }).click({ timeout: 8000 }));
 await riya.waitForTimeout(2000);
 const review = await text(dlg(riya));
 step(/Arjun Nair/.test(review) && /GitHub and React stickers/.test(review), 'owner reads the claimant and their proof');
 step(/Who says they found it/.test(review), 'wording fits a lost post ("Who says they found it")');
-await guard('approve', () => dlg(riya).getByRole('button', { name: /approve & mark returned/i }).first().click({ timeout: 8000 }));
+// Approve Arjun's claim, not whichever happens to be listed first.
+await guard('approve', () => dlg(riya).locator('div').filter({ hasText: 'Arjun Nair' })
+  .filter({ has: riya.getByRole('button', { name: /approve & mark returned/i }) }).last()
+  .getByRole('button', { name: /approve & mark returned/i }).click({ timeout: 8000 }));
 await riya.waitForTimeout(2500);
 const approved = await text(dlg(riya));
 step(/Approved/i.test(approved), 'claim is approved');
 step(/Returned\. This report is closed/i.test(approved), 'the review screen flips to Returned at once');
+step(/Declined/.test(approved) && !/Pending/.test(approved), 'approving declines the other claim — nobody is left on Pending');
 await reload(riya);
 step(/Returned/.test(await text(card(riya, 'Blue Stainless Water Bottle'))), 'the card reads Returned for the owner');
 await reload(arjun);
@@ -140,6 +154,14 @@ await arjun.waitForTimeout(2000);
 const mine = await text(dlg(arjun));
 step(/Blue Stainless Water Bottle/.test(mine) && /Approved/.test(mine), 'the finder sees the outcome under My claims');
 step(/marked returned/i.test(mine), 'My claims shows it is returned');
+await reload(meera);
+step(/Claim declined/.test(await text(card(meera, 'Blue Stainless Water Bottle'))) || /Returned to owner/.test(await text(card(meera, 'Blue Stainless Water Bottle'))), 'the other claimant’s card no longer invites a claim');
+await meera.getByRole('button', { name: 'Account menu' }).first().click();
+await meera.waitForTimeout(500);
+await guard('open My claims (Meera, declined)', () => meera.getByRole('button', { name: /my claims/i }).first().click({ timeout: 8000 }));
+await meera.waitForTimeout(2000);
+step(/Declined/.test(await text(dlg(meera))) && /someone else/.test(await text(dlg(meera))), 'and My claims tells them it went to someone else');
+await reload(meera);
 await reload(arjun);
 
 console.log('\n── 3b. Direction B: owner claims a FOUND post');

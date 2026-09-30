@@ -1,9 +1,11 @@
 // Moderation data layer — the flag queue and the resolve action.
 // Reads are gated by firestore.rules (`allow read: if isMod()`), so a normal
 // user subscribing here simply gets a permission error rather than data.
-// The resolve action is a Cloud Function: clients must never write flag
-// outcomes, strikes or trust directly.
-import { collection, onSnapshot, query, where, orderBy } from 'firebase/firestore';
+// The resolve action prefers the resolveFlag Cloud Function, which also owns
+// strikes and trust (clients never write those). Without Blaze it falls back to
+// what the rules let a moderator do directly: close the flag and, for a
+// strike, remove the offending post.
+import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './firebase';
 import { COL } from '../types';
@@ -38,12 +40,28 @@ export function subscribeOpenFlags(cb, onError = () => {}) {
   );
 }
 
+const TARGET_COLLECTION = { item: COL.lostFoundItems, listing: COL.listings };
+
 /**
- * Resolve a flag. `action: 'strike'` also increments the offender's strike
- * count and recomputes their trust score, server-side.
+ * Resolve a flag. 'dismiss' closes it. 'strike' also removes the flagged post
+ * and, when Cloud Functions are deployed, adds a strike to its owner and
+ * recomputes their trust. Returns { struck } — false when only the post could
+ * be removed because the function is not deployed.
  */
-export async function resolveFlag(flagId, action = 'dismiss') {
-  const call = httpsCallable(functions, 'resolveFlag');
-  const res = await call({ flagId, action });
-  return res.data;
+export async function resolveFlag(flag, action = 'dismiss', moderatorUid = null) {
+  let struck = false;
+  try {
+    await httpsCallable(functions, 'resolveFlag')({ flagId: flag.id, action });
+    struck = action === 'strike';
+  } catch (err) {
+    if (!['functions/not-found', 'functions/internal', 'functions/unavailable'].includes(err?.code)) throw err;
+    await updateDoc(doc(db, COL.flags, flag.id), {
+      status: 'resolved', action, resolvedBy: moderatorUid, resolvedAt: serverTimestamp(),
+    });
+  }
+  const col = TARGET_COLLECTION[flag.targetType];
+  if (action === 'strike' && col && flag.targetId) {
+    await deleteDoc(doc(db, col, flag.targetId));
+  }
+  return { struck };
 }

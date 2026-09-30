@@ -17,6 +17,10 @@
 // without touching anything real users posted. --reset deletes the demo docs
 // (and their claims/messages) without re-seeding.
 //
+// --wipe-all first deletes EVERY post, claim, chat, notification, flag and
+// review — test posts included — so the database holds only the demo data.
+// User profiles and sign-in accounts are kept. This cannot be undone.
+//
 // The demo accounts must exist first (scripts/seed-demo-users.mjs).
 //
 // Live project (service account key from Firebase console → Project settings
@@ -31,6 +35,7 @@ import { createRequire } from 'node:module';
 
 const arg = (name) => (process.argv.includes(name) ? process.argv[process.argv.indexOf(name) + 1] : null);
 const RESET_ONLY = process.argv.includes('--reset');
+const WIPE_ALL = process.argv.includes('--wipe-all');
 const EMULATED = !!process.env.FIRESTORE_EMULATOR_HOST;
 const PROJECT = arg('--project') || (EMULATED ? (process.env.GCLOUD_PROJECT || 'foundit-demo') : null);
 
@@ -55,13 +60,14 @@ const { getFirestore, Timestamp } = require('firebase-admin/firestore');
 initializeApp(EMULATED ? { projectId: PROJECT } : { credential: applicationDefault(), projectId: PROJECT });
 const db = getFirestore();
 
-// ── Reset: delete every demo-* doc, subcollections included ─────────────────
-async function wipeDemo() {
+// ── Reset: delete demo-* docs (or everything), subcollections included ──────
+const CONTENT = ['lostFoundItems', 'listings', 'chats', 'notifications', 'flags', 'reviews'];
+async function wipe(all) {
   let n = 0;
-  for (const col of ['lostFoundItems', 'listings', 'chats', 'notifications', 'flags', 'reviews']) {
+  for (const col of CONTENT) {
     const snap = await db.collection(col).get();
     for (const d of snap.docs) {
-      if (!d.id.startsWith('demo-') && !d.id.includes('_demo-')) continue;
+      if (!all && !d.id.startsWith('demo-') && !d.id.includes('_demo-')) continue;
       await db.recursiveDelete(d.ref);
       n++;
     }
@@ -69,7 +75,11 @@ async function wipeDemo() {
   return n;
 }
 
-const removed = await wipeDemo();
+if (WIPE_ALL && !EMULATED) {
+  console.log(`--wipe-all: deleting ALL posts, claims, chats, notifications, flags and reviews in ${PROJECT} in 5s. Ctrl+C to stop.`);
+  await new Promise((r) => setTimeout(r, 5000));
+}
+const removed = await wipe(WIPE_ALL);
 if (RESET_ONLY) {
   console.log(`Removed ${removed} demo docs from ${PROJECT}.`);
   process.exit(0);
@@ -155,12 +165,14 @@ for (const [id, type, title, description, category, zone, who, hours, status = '
     // suggestMatches function is not deployed, and prefers it when it is.
     matchedWith: [], matchScore: null,
     createdAt: ago(hours),
-    ...(status === 'resolved' ? { resolvedClaimId: 'demo-claim', resolvedAt: ago(hours - 20) } : {}),
+    // Both returned items went back via Kabir's approved claim (seeded below).
+    ...(status === 'resolved' ? { resolvedClaimId: P.kabir.uid, resolvedAt: ago(hours - 20) } : {}),
   });
 }
 
 const claim = (itemId, who, item, proof, meetingSpot, status, hours) =>
-  db.doc(`lostFoundItems/${itemId}/claims/demo-claim`).set({
+  // A claim's id is its claimant's uid: one claim per person per item.
+  db.doc(`lostFoundItems/${itemId}/claims/${who.uid}`).set({
     claimantUid: who.uid, claimantName: who.name, claimantDept: who.dept, claimantVerified: true,
     itemTitle: item.title, itemType: item.type,
     message: '', proof, meetingSpot, status, createdAt: ago(hours),
@@ -250,7 +262,7 @@ const ZONES = [
 ];
 for (const [id, name, adjacent] of ZONES) await db.doc(`campusZones/${id}`).set({ name, adjacent });
 
-console.log(`Seeded ${PROJECT}${removed ? ` (replaced ${removed} old demo docs)` : ''}:`);
+console.log(`Seeded ${PROJECT}${removed ? ` (deleted ${removed} ${WIPE_ALL ? '' : 'old demo '}docs first)` : ''}:`);
 console.log(`  ${reports.length} lost & found reports (3 matching pairs, 2 returned), 3 claims`);
 console.log(`  ${listings.length} marketplace listings (1 open offer, 1 sold, 1 flagged)`);
 console.log(`  1 chat thread, ${notes.length} notifications, 1 open flag, ${ZONES.length} campus zones`);

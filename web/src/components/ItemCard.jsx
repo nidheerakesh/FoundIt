@@ -11,7 +11,7 @@ const TYPE_BADGE = {
 
 const LISTING_LABEL = { Sell: 'Sell', Rent: 'For Rent', Giveaway: 'Free' };
 
-export default function ItemCard({ item, index = 0, currentUid = null, onClaim, onChat, onHandshake, onFlag, onSmartMatch, onReviewClaims }) {
+export default function ItemCard({ item, index = 0, currentUid = null, myClaim = null, onOpenMyClaims, onClaim, onChat, onHandshake, onFlag, onSmartMatch, onReviewClaims }) {
   const badge = TYPE_BADGE[item.type] ?? TYPE_BADGE.marketplace;
   const isMarket = item.type === 'marketplace';
   // Mock/demo cards carry no postedBy, so this is false for them — they stay claimable.
@@ -153,6 +153,12 @@ export default function ItemCard({ item, index = 0, currentUid = null, onClaim, 
           <button className={`btn btn-sm ${pending ? 'btn-primary' : 'btn-ghost'}`} style={{ flex: 1 }}
             onClick={() => onReviewClaims?.(item)}>
             <ShieldCheck size={15} /> {pending ? `Review claims (${pending})` : 'No claims yet'}
+          </button>
+        ) : myClaim ? (
+          // You have already responded to this post: one claim per person.
+          <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => onOpenMyClaims?.()}>
+            <ShieldCheck size={15} />{' '}
+            {myClaim === 'approved' ? 'Claim approved' : myClaim === 'rejected' ? 'Claim declined' : 'Claim sent · waiting'}
           </button>
         ) : (
           <button className="btn btn-primary btn-sm" style={{ flex: 1 }} onClick={() => onClaim?.(item)}>

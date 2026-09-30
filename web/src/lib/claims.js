@@ -2,7 +2,8 @@ import {
   collection,
   collectionGroup,
   doc,
-  addDoc,
+  getDoc,
+  setDoc,
   updateDoc,
   onSnapshot,
   query,
@@ -26,8 +27,15 @@ export async function submitClaim(item, { message, proof, meetingSpot }, user) {
   if (!itemId) throw new Error('Item ID is required.');
   if (!user?.uid) throw new Error('You must be signed in to submit a claim.');
 
-  const claimsCol = collection(db, COL.lostFoundItems, itemId, 'claims');
-  const docRef = await addDoc(claimsCol, {
+  // One claim per person per item: the claim lives at claims/{claimantUid}.
+  // The rules require that id and refuse to overwrite it, so a second attempt
+  // (double tap, or claiming again later) cannot stack duplicates.
+  const claimRef = doc(db, COL.lostFoundItems, itemId, 'claims', user.uid);
+  const existing = await getDoc(claimRef).catch(() => null);
+  if (existing?.exists()) {
+    throw new Error('You have already sent a claim on this item. Follow it under My claims.');
+  }
+  await setDoc(claimRef, {
     claimantUid: user.uid,
     claimantName: user.name || user.displayName || 'Campus Student',
     claimantDept: user.dept || '',
@@ -41,7 +49,7 @@ export async function submitClaim(item, { message, proof, meetingSpot }, user) {
     createdAt: serverTimestamp(),
   });
 
-  return docRef.id;
+  return claimRef.id;
 }
 
 /** Listen to all claims on an item. Only its poster (or a moderator) may. */
@@ -96,7 +104,7 @@ export function subscribeMyClaims(uid, cb, onError = () => {}) {
  * If onClaimResolved is deployed it will also run; it sets the same status and
  * additionally updates resolvedCount and trust, so there is no conflict.
  */
-export async function resolveClaim(itemId, claimId, status) {
+export async function resolveClaim(itemId, claimId, status, otherPendingIds = []) {
   const claimRef = doc(db, COL.lostFoundItems, itemId, 'claims', claimId);
   if (status !== 'approved') {
     await updateDoc(claimRef, { status });
@@ -104,6 +112,11 @@ export async function resolveClaim(itemId, claimId, status) {
   }
   const batch = writeBatch(db);
   batch.update(claimRef, { status: 'approved' });
+  // Only one person gets the item: everyone else still waiting is declined in
+  // the same write, so nobody is left on "Pending" for a returned item.
+  for (const id of otherPendingIds) {
+    if (id !== claimId) batch.update(doc(db, COL.lostFoundItems, itemId, 'claims', id), { status: 'rejected' });
+  }
   batch.update(doc(db, COL.lostFoundItems, itemId), {
     status: 'resolved',
     resolvedClaimId: claimId,
