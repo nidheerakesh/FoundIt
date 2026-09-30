@@ -173,6 +173,35 @@ Others you can offer:
 - `suggestMatches` sent duplicate notifications — it writes `status`, which was
   also one of its own match inputs, so its write re-triggered it.
 - The mock-data fallback latched permanently once the first snapshot timed out.
+- The chat on your own listing opened a thread with yourself, because the
+  counterparty was always "the poster" — exactly wrong for the seller trying to
+  reach their buyer.
+
+### 3e. The best security answer you have
+`firestore.rules`, `web/src/lib/feed.js`
+
+> "We were judging claims on proof only the true owner should know — but the
+> item's own description named those same marks and sat on a public document.
+> A fraudster could read 'MEERA scratched on the back' off the card and hand it
+> straight back. Hiding it in the UI would have been theatre: rules authorise
+> whole documents, so anything on the card is readable over the REST API."
+
+> "So we split the document. The description moved to a `private/detail`
+> subdocument only the poster and moderators can read — the same shape we
+> already used for claim proofs."
+
+Then volunteer the cost, because an examiner will look for it:
+
+> "That broke matching, because our keywords were derived from the description —
+> publishing them would have leaked the same words as a list. Public tags are now
+> the title plus a closed vocabulary of generic terms. The pairs still score
+> 74–87% against a threshold of 50, but it is weaker, and it has to be: you
+> cannot hide text and score on it in the browser, because whatever the matcher
+> compares is readable by whoever runs the matcher. Doing it properly needs
+> trusted compute — which is exactly why `suggestMatches` is a Cloud Function."
+
+That last sentence is the one to land. It shows the constraint was understood
+rather than worked around.
 
 ---
 

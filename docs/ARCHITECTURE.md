@@ -421,6 +421,47 @@ Layer 5: Business rules — reviews only after resolved exchange
 
 The `keeps(field)` helper ensures fields like `trustScore`, `matchScore`, `status`, `role`, `strikes` are immutable from the client. Only Cloud Functions (using Admin SDK, which bypasses rules) can modify them.
 
+### 8.3.1 Document splitting — where field-level privacy comes from
+
+Firestore rules authorise **whole documents**. There is no way to grant a read of
+`title` while denying `description` on the same document: if a client may read the
+document, it reads every field, including over the REST API.
+
+Two things needed to be hidden from exactly the people who can see the card:
+
+| Secret | Lives in | Readable by |
+|---|---|---|
+| A claimant's proof of ownership | `lostFoundItems/{id}/claims/{uid}` | poster, that claimant, moderators |
+| The poster's own item description | `lostFoundItems/{id}/private/detail` | poster, moderators |
+
+Both are solved the same way — move the field into its own document and write a
+rule for that document. The item description matters because a claim is judged on
+marks only the true owner should know. Public on the card, *"MEERA scratched on the
+back"* is not evidence; it is a script a fraudster can read and recite.
+
+**The cost, stated honestly.** `keywords` used to be derived from the description,
+so leaving it public would have leaked the same words as a list. It is now built
+from the title plus a closed vocabulary of generic terms — colour, material, kind
+(`derivePublicTags`, `web/src/lib/feed.js`). Matching therefore compares coarse
+attributes, not distinguishing detail. Measured against the seeded pairs this still
+scores 74–87%, comfortably over the threshold of 50, while an unrelated control
+scores 20%.
+
+This is a genuine trade-off, not a free win: **hiding text and scoring on it cannot
+both happen in the client**, because anything the matcher compares is readable by
+whoever runs the matcher. Full-strength matching over private text needs trusted
+compute — which is precisely what `suggestMatches` does with the Admin SDK, and the
+reason it is a Cloud Function rather than client code.
+
+### 8.3.2 Corroborated claims
+
+A claim may cite the claimant's own report of the opposite type (`viaItemId`) —
+"this found calculator is the one I reported lost" — and the finder sees its match
+score beside the proof. The rule `get()`s the cited report and requires that it
+belongs to the claimant and is of the opposite type, so the citation cannot be
+forged by pointing at a stranger's matching post. The link is optional: somebody
+who lost something but never posted it is still able to claim on proof alone.
+
 ### 8.4 Input Validation
 
 - Campus email domain gate (configurable via `VITE_CAMPUS_DOMAIN`)

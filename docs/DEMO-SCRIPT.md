@@ -123,17 +123,29 @@ The strongest moment. Keep screen B visible and **don't reload it**.
 Riya lost the notebook, so Riya claims it. Arjun found it, so Arjun approves.
 
 1. On **A**, on Arjun's **Found blue spiral lab record book in LH-101**, click
-   **Claim this**. In the proof box type:
+   **Claim this**. Point out the first field: it already offers Riya's own
+   **lost** notebook with its match score, because she posted one. Leave it
+   selected. In the proof box type:
    **`Name written inside the front cover: Riya Singh, ECE lab batch 4`**
-   Click **Submit claim**. The confirmation points her to **My claims**.
+   Click **Submit Claim Request**. The confirmation points her to **My claims**.
    Close it. Her card now reads **Claim sent · waiting**, so she can't claim
    twice.
 2. On **B**, without reloading, Arjun's card now reads **Review claims (1)**.
-   Click it and read Riya's proof aloud.
+   Click it. Arjun sees his own description at the top — *private to you* —
+   then Riya's proof, then **Linked to their own report: … % match**. Read the
+   proof aloud and compare.
 
 > "No notification needed: the count is on the finder's card as soon as the
-> claim lands. And the proof is private. Only the finder, the claimant and
-> moderators can read it, so a scammer can't copy the real owner's answer."
+> claim lands. Two things make the proof mean something. It's private, so only
+> the finder, the claimant and moderators can read it. And the item's own
+> description is private too — that's the part people miss. If the card showed
+> 'name written inside the front cover', a scammer would just read it and type
+> it back. So the card shows the title and coarse tags; the identifying detail
+> lives in a subdocument only the poster can read."
+
+> "The link under the proof is checked by the rules, not the UI: the report
+> she cited has to be one she actually posted, of the opposite type. Nobody
+> can point at a stranger's matching post to look credible."
 
 3. Still on **B**, click **Message** under Riya's claim and send
    **`Found it! LH-101 at 4 pm?`**
