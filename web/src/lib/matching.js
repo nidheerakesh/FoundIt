@@ -91,13 +91,16 @@ export function calculateMatchScore(itemA, itemB) {
   const setB = keywordSet(itemB);
   const shared = [...setA].filter((t) => setB.has(t));
   const keywordOverlap = jaccard(setA, setB);
-  if (shared.length > 0) {
-    factors.push({
-      label: 'Matching Keywords',
-      detail: shared.slice(0, 5).join(', '),
-      pts: Math.round(30 * keywordOverlap),
-    });
-  }
+  // No shared words → almost certainly different items that happen to share a
+  // broad category and location. Category + location + recency alone can push
+  // two unrelated "Accessories" posts past threshold, so require at least one
+  // matching token before scoring the pair at all.
+  if (shared.length === 0) return { score: 0, factors: [] };
+  factors.push({
+    label: 'Matching Keywords',
+    detail: shared.slice(0, 5).join(', '),
+    pts: Math.round(30 * keywordOverlap),
+  });
 
   const zone = zoneProximity(itemA, itemB);
   if (zone === 1) {
