@@ -1,12 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { X, PlusCircle, Sparkles } from 'lucide-react';
 import { CATEGORIES, CAMPUS_LOCATIONS } from '../data/mockData';
 import { generatePostAssistance } from '../lib/ai';
 
 const TYPES = [
-  { key: 'lost', label: 'Lost item', cls: 'badge-lost' },
-  { key: 'found', label: 'Found item', cls: 'badge-found' },
-  { key: 'marketplace', label: 'Sell / Give', cls: 'badge-market' },
+  { key: 'lost', label: 'Lost item', cls: 'badge-lost', submit: 'Post lost report', dest: 'Lost & Found' },
+  { key: 'found', label: 'Found item', cls: 'badge-found', submit: 'Post found report', dest: 'Lost & Found' },
+  { key: 'marketplace', label: 'Sell / Give', cls: 'badge-market', submit: 'List on Marketplace', dest: 'Marketplace' },
 ];
 
 const CONDITIONS = ['Like New', 'Good Condition', 'Used - Works Fine', 'For Parts'];
@@ -22,15 +22,22 @@ const EMPTY = {
   condition: 'Good Condition',
 };
 
-export default function PostModal({ isOpen, onClose, onSubmit }) {
+export default function PostModal({ isOpen, onClose, onSubmit, initialType = 'lost' }) {
   const [form, setForm] = useState(EMPTY);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiNote, setAiNote] = useState('');
   const [posting, setPosting] = useState(false);
+  // Open on the type that fits where the user is: from the Marketplace tab a
+  // post is a listing. Defaulting to "Lost item" everywhere sent sales that
+  // skipped the type chips into Lost & Found.
+  useEffect(() => {
+    if (isOpen) setForm((f) => ({ ...f, type: initialType }));
+  }, [isOpen, initialType]);
   if (!isOpen) return null;
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const isMarket = form.type === 'marketplace';
+  const typeInfo = TYPES.find((t) => t.key === form.type) || TYPES[0];
   const valid = form.title.trim() && form.description.trim();
 
   const handleAiAssist = async () => {
@@ -215,8 +222,11 @@ export default function PostModal({ isOpen, onClose, onSubmit }) {
           />
         </Field>
 
+        <p style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-muted)', margin: '4px 0 0' }}>
+          This goes to the <strong>{typeInfo.dest}</strong> feed as a <strong>{typeInfo.label}</strong>.
+        </p>
         <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} disabled={!valid || posting}>
-          <PlusCircle size={16} /> {posting ? 'Posting…' : 'Post report'}
+          <PlusCircle size={16} /> {posting ? 'Posting…' : typeInfo.submit}
         </button>
       </form>
     </div>

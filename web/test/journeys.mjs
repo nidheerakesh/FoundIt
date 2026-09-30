@@ -53,6 +53,52 @@ step(/Grey Dell laptop charger/.test(await text(riya.locator('main'))), 'the new
 step(/No claims yet/.test(await text(card(riya, 'Grey Dell laptop charger'))), 'its poster sees "No claims yet" on it, not a claim button');
 step(/How getting something back works/.test(await text(riya.locator('body'))), 'the in-app guide explains the workflow');
 
+console.log('\n── 2b. Every post type lands in the right feed (the reported bug)');
+const feedHas = async (p, tabName, t) => { await tab(p, tabName); await p.waitForTimeout(500); return (await text(p.locator('main'))).includes(t); };
+const postVia = async (p, { fromTab, pick, title, desc, price }) => {
+  await tab(p, fromTab); await p.waitForTimeout(400);
+  await p.getByRole('button', { name: /^post$/i }).first().click();
+  await p.waitForTimeout(700);
+  const d = dlg(p);
+  const before = ((await d.locator('[aria-pressed="true"]').textContent().catch(() => '')) || '').trim();
+  if (pick) await d.getByRole('button', { name: pick }).click();
+  await d.locator('input').first().fill(title);
+  if (price) await d.locator('input[type="number"]').fill(price);
+  await d.locator('textarea').first().fill(desc);
+  const label = ((await d.locator('button[type="submit"]').textContent()) || '').trim();
+  await d.locator('button[type="submit"]').click();
+  await p.waitForTimeout(2500);
+  return { before, label };
+};
+// 1. From the Marketplace tab, without touching the type chips.
+const m1 = await postVia(riya, { fromTab: 'Marketplace', title: 'Casio FX-991ES calculator', desc: 'Works perfectly, selling after exams.', price: '400' });
+step(m1.before === 'Sell / Give', 'Post from the Marketplace tab opens on "Sell / Give"', m1.before);
+step(/List on Marketplace/.test(m1.label), 'the submit button says where it goes', m1.label);
+await reload(riya);
+step(await feedHas(riya, 'Marketplace', 'Casio FX-991ES calculator'), 'the listing shows in Marketplace');
+step(!(await feedHas(riya, 'Lost & Found', 'Casio FX-991ES calculator')), 'and NOT in Lost & Found');
+await tab(riya, 'Marketplace'); await riya.waitForTimeout(400);
+const listed = await text(card(riya, 'Casio FX-991ES calculator'));
+step(/₹400/.test(listed) && /No offers yet/.test(listed), 'the card shows price and the seller view', listed.slice(0, 120));
+// 2. From the All tab, choosing Sell / Give explicitly.
+const m2 = await postVia(riya, { fromTab: 'All', pick: /sell \/ give/i, title: 'Study lamp giveaway desk', desc: 'LED desk lamp, free to a good home.', price: '0' });
+step(m2.before === 'Lost item' && /List on Marketplace/.test(m2.label), 'All tab: picking Sell / Give switches the button to "List on Marketplace"', `${m2.before} / ${m2.label}`);
+await reload(riya);
+step(await feedHas(riya, 'Marketplace', 'Study lamp giveaway desk') && !(await feedHas(riya, 'Lost & Found', 'Study lamp giveaway desk')), 'that listing is in Marketplace only');
+// 3. A found report from the Lost & Found tab.
+const f1 = await postVia(arjun, { fromTab: 'Lost & Found', pick: /found item/i, title: 'Black umbrella near canteen', desc: 'Compact black umbrella with wooden handle, left at the canteen.' });
+step(/Post found report/.test(f1.label), 'Found item → "Post found report"', f1.label);
+await reload(arjun);
+step(await feedHas(arjun, 'Lost & Found', 'Black umbrella near canteen') && !(await feedHas(arjun, 'Marketplace', 'Black umbrella near canteen')), 'the found report is in Lost & Found only');
+// 4. Someone else can deal on a freshly posted listing, not just seeded ones.
+await reload(arjun); await tab(arjun, 'Marketplace'); await arjun.waitForTimeout(500);
+await guard('deal on new listing', () => card(arjun, 'Casio FX-991ES calculator').getByRole('button', { name: /make a deal/i }).click({ timeout: 8000 }));
+await arjun.waitForTimeout(800);
+await guard('offer on new listing', () => dlg(arjun).locator('button[type="submit"]').click({ timeout: 8000 }));
+await arjun.waitForTimeout(2200);
+step(/Offer sent to Riya/i.test(await text(dlg(arjun))), 'another student can make an offer on it');
+await reload(arjun); await reload(riya);
+
 console.log('\n── 3. Direction A: finder answers a LOST post (FR-10, FR-11, FR-17)');
 await card(arjun, 'Blue Stainless Water Bottle').getByRole('button', { name: /i found it/i }).click();
 await arjun.waitForTimeout(700);
@@ -179,6 +225,58 @@ if (hasQueue) {
   await meera.waitForTimeout(2000);
   step(/Campus ID Card|Spam|flag/i.test(await text(dlg(meera))), 'the moderator sees the new flag in the queue');
 }
+
+console.log('\n── 5b. Search, AI search, Smart Match, profile, notifications, sign-out');
+await reload(riya); await tab(riya, 'All'); await riya.waitForTimeout(400);
+await riya.getByRole('textbox', { name: 'Search' }).fill('calculator');
+await riya.waitForTimeout(600);
+const searched = await riya.locator('main article').allTextContents();
+step(searched.length > 0 && searched.every((t) => /calculator/i.test(t)), 'search narrows the feed', `${searched.length} cards`);
+await riya.getByRole('textbox', { name: 'Search' }).fill('');
+await riya.waitForTimeout(400);
+await riya.getByRole('button', { name: /ai search/i }).first().click();
+await riya.waitForTimeout(600);
+await riya.getByPlaceholder(/ask campus ai/i).fill('Did anyone find an umbrella?');
+await riya.getByRole('button', { name: /send prompt to ai/i }).click();
+await riya.waitForTimeout(3500);
+const ai = await text(riya.getByRole('dialog', { name: /campus ai assistant/i }));
+step(/Black umbrella near canteen/.test(ai) && !/ran into an error/i.test(ai), 'AI search answers and links the umbrella report', ai.slice(-160));
+await reload(riya);
+const badge = riya.locator('button[title="View smart match"]').first();
+step((await badge.count()) > 0, 'a Smart Match badge is shown on paired reports');
+if (await badge.count()) {
+  await badge.click(); await riya.waitForTimeout(1000);
+  step(/match/i.test(await text(dlg(riya))), 'the Smart Match breakdown opens');
+  await reload(riya);
+}
+await riya.getByRole('button', { name: 'Account menu' }).first().click(); await riya.waitForTimeout(400);
+await riya.getByRole('button', { name: /my profile/i }).first().click(); await riya.waitForTimeout(1200);
+const prof = riya.getByRole('dialog', { name: 'Profile' });
+step(/Riya Singh/.test(await text(prof)), 'profile opens with the user’s name');
+await guard('edit profile', async () => {
+  await prof.getByRole('button', { name: /edit/i }).first().click({ timeout: 5000 });
+  await prof.getByPlaceholder('Dept / Hostel').fill('ECE · Hostel B');
+  await prof.getByRole('button', { name: /save/i }).first().click({ timeout: 5000 });
+});
+await riya.waitForTimeout(1800);
+await reload(riya);
+await riya.getByRole('button', { name: 'Account menu' }).first().click(); await riya.waitForTimeout(400);
+await riya.getByRole('button', { name: /my profile/i }).first().click(); await riya.waitForTimeout(1200);
+step(/ECE · Hostel B/.test(await text(riya.getByRole('dialog', { name: 'Profile' }))), 'profile edits save and survive a reload');
+await reload(riya);
+const bell = riya.getByRole('button', { name: /^Notifications/ }).first();
+step((await bell.count()) > 0, 'the notification bell is present');
+if (await bell.count()) {
+  await bell.click(); await riya.waitForTimeout(1200);
+  step(!/insufficient permissions|failed-precondition/i.test(await text(riya.locator('body'))), 'opening notifications raises no permission or index error');
+}
+await reload(meera);
+await meera.getByRole('button', { name: 'Account menu' }).first().click(); await meera.waitForTimeout(400);
+await meera.getByRole('button', { name: /sign out/i }).first().click(); await meera.waitForTimeout(1500);
+step((await meera.getByRole('button', { name: /^sign in$/i }).count()) > 0, 'sign out returns to the signed-out view');
+await meera.getByRole('button', { name: /sign in/i }).first().click(); await meera.waitForTimeout(500);
+await meera.locator('button').filter({ hasText: /Meera Das/ }).first().click(); await meera.waitForTimeout(2500);
+step(!(await meera.getByRole('button', { name: /^sign in$/i }).count()), 'and a demo account can sign straight back in');
 
 console.log('\n── 6. Page health');
 step(errs.length === 0, 'no uncaught page errors across all three sessions', errs.slice(0,3).join(' | '));
