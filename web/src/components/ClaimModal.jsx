@@ -3,10 +3,12 @@ import { X, ShieldCheck, MapPin, CheckCircle, Send } from 'lucide-react';
 import { submitClaim } from '../lib/claims';
 import { CAMPUS_LOCATIONS } from '../data/mockData';
 
-export default function ClaimModal({ isOpen, onClose, item, user, onClaimSuccess, onOpenChat }) {
+export default function ClaimModal({ isOpen, onClose, item, user, candidates = [], onClaimSuccess, onOpenChat }) {
   const [proof, setProof] = useState('');
   const [message, setMessage] = useState('');
   const [meetingSpot, setMeetingSpot] = useState('Central Library');
+  // Best match first (App sorts them), so the obvious answer is preselected.
+  const [viaItemId, setViaItemId] = useState('');
   const [busy, setBusy] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
@@ -15,6 +17,9 @@ export default function ClaimModal({ isOpen, onClose, item, user, onClaimSuccess
 
   const isFound = item.type === 'found';
   const valid = proof.trim().length >= 4;
+  // '' means "not chosen yet" and falls back to the top candidate; 'none' is an
+  // explicit "none of these", which submits an unlinked claim.
+  const chosenVia = viaItemId === '' ? candidates[0]?.id || '' : viaItemId;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -22,7 +27,11 @@ export default function ClaimModal({ isOpen, onClose, item, user, onClaimSuccess
     setBusy(true);
     setError('');
     try {
-      await submitClaim(item, { proof, message, meetingSpot }, user);
+      await submitClaim(
+        item,
+        { proof, message, meetingSpot, viaItemId: chosenVia === 'none' ? null : chosenVia || null },
+        user
+      );
       setSubmitted(true);
       onClaimSuccess?.(`Claim submitted for "${item.title}". The poster will review your proof.`);
     } catch (err) {
@@ -115,6 +124,31 @@ export default function ClaimModal({ isOpen, onClose, item, user, onClaimSuccess
           </div>
         ) : (
           <form onSubmit={handleSubmit}>
+            {candidates.length > 0 && (
+              <label style={{ display: 'block', marginBottom: 14 }}>
+                <span style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--ink-secondary)', marginBottom: 6 }}>
+                  {isFound ? 'Which of your lost reports is this?' : 'Which of your found reports is this?'}
+                </span>
+                <select
+                  className="input"
+                  value={chosenVia}
+                  onChange={(e) => setViaItemId(e.target.value)}
+                >
+                  {candidates.map((c) => (
+                    <option key={c.id} value={c.id} style={{ background: 'var(--surface)' }}>
+                      {c.title} — {c.score}% match
+                    </option>
+                  ))}
+                  <option value="none" style={{ background: 'var(--surface)' }}>
+                    None of these
+                  </option>
+                </select>
+                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-muted)', marginTop: 4, display: 'block' }}>
+                  Linking your own report shows {item.reporter} a match score next to your proof.
+                </span>
+              </label>
+            )}
+
             <label style={{ display: 'block', marginBottom: 14 }}>
               <span style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--ink-secondary)', marginBottom: 6 }}>
                 Verification Proof / Identifying Features *

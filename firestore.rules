@@ -63,6 +63,12 @@ service cloud.firestore {
       // Claims: claimant creates their own; only the item owner or a mod resolves it.
       match /claims/{claimId} {
         function item() { return get(/databases/$(database)/documents/lostFoundItems/$(itemId)).data; }
+        // Optional corroboration: the claimant's own report of the opposite
+        // type ("this found calculator is the one I reported lost").
+        function via() { return request.resource.data.get('viaItemId', null); }
+        function viaDoc() {
+          return get(/databases/$(database)/documents/lostFoundItems/$(via())).data;
+        }
         // A claim holds proof of ownership. If anyone could read it, a scammer
         // could copy the real owner's answer and submit it as their own — so
         // only the poster who judges it, the claimant, and moderators may.
@@ -78,7 +84,13 @@ service cloud.firestore {
         allow create: if isVerified() && request.resource.data.claimantUid == request.auth.uid
           && claimId == request.auth.uid
           && item().postedBy != request.auth.uid
-          && item().status != 'resolved';
+          && item().status != 'resolved'
+          // The link may be absent, but it cannot be faked: a cited report must
+          // be one this user actually posted, and of the opposite type.
+          // Otherwise anyone could point at a stranger's matching post and
+          // borrow its credibility.
+          && (via() == null
+              || (viaDoc().postedBy == request.auth.uid && viaDoc().type != item().type));
         // Approve/reject only (FR-10). The resolver moves the status and nothing
         // else — it cannot rewrite the claimant's proof or reassign the claim —
         // and only out of 'pending', so the state machine stays one-way

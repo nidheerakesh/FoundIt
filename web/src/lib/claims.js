@@ -21,8 +21,14 @@ import { COL } from '../types';
  * - On a LOST post it says "I found it" and carries where/when it was found.
  * The item title is copied onto the claim so "My claims" can show it without
  * reading every item.
+ *
+ * `viaItemId` optionally names the claimant's own report of the opposite type —
+ * "this found calculator is the one I reported lost". It is corroboration, not
+ * a substitute for proof, and it is optional so somebody who never posted is
+ * not locked out. The rules verify that the cited report really belongs to the
+ * claimant, otherwise anyone could cite a stranger's post to look credible.
  */
-export async function submitClaim(item, { message, proof, meetingSpot }, user) {
+export async function submitClaim(item, { message, proof, meetingSpot, viaItemId }, user) {
   const itemId = item?.id;
   if (!itemId) throw new Error('Item ID is required.');
   if (!user?.uid) throw new Error('You must be signed in to submit a claim.');
@@ -42,6 +48,7 @@ export async function submitClaim(item, { message, proof, meetingSpot }, user) {
     claimantVerified: !!user.verified,
     itemTitle: item.title || '',
     itemType: item.type || '',
+    viaItemId: viaItemId || null,
     message: message?.trim() || '',
     proof: proof?.trim() || '',
     meetingSpot: meetingSpot || 'Library Front Desk',

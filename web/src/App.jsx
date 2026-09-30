@@ -60,6 +60,7 @@ export default function App() {
   const [activeItem, setActiveItem] = useState(null);
   const [activeMatchResult, setActiveMatchResult] = useState(null);
   const [isClaimOpen, setIsClaimOpen] = useState(false);
+  const [claimCandidates, setClaimCandidates] = useState([]);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isDealOpen, setIsDealOpen] = useState(false);
   const [isFlagOpen, setIsFlagOpen] = useState(false);
@@ -111,6 +112,14 @@ export default function App() {
 
   const handleOpenClaim = (target) => {
     if (!isAuthed) { showToast('Sign in with your campus account to claim items.'); setIsAuthOpen(true); return; }
+    // Offer the claimant their own reports of the opposite type as evidence.
+    // findMatchesForItem already restricts to the opposite type and to scores
+    // at or above MATCH_THRESHOLD, so narrowing by uid is all that is left.
+    setClaimCandidates(
+      findMatchesForItem(target, items)
+        .filter((m) => m.candidate.postedBy && m.candidate.postedBy === user?.uid)
+        .map((m) => ({ id: m.candidate.id, title: m.candidate.title, score: m.score }))
+    );
     setActiveItem(target);
     setIsClaimOpen(true);
   };
@@ -361,6 +370,7 @@ export default function App() {
         onClose={() => setIsClaimOpen(false)}
         item={activeItem}
         user={poster || user}
+        candidates={claimCandidates}
         onClaimSuccess={(msg) => showToast(msg)}
         onOpenChat={(it, who) => handleOpenChat(it, who)}
       />
@@ -403,6 +413,7 @@ export default function App() {
         onClose={() => setIsClaimsReviewOpen(false)}
         // The live item, so approving flips the screen to "Returned" at once.
         item={items.find((i) => i.id === activeItem?.id) || activeItem}
+        items={items}
         onToast={(msg) => showToast(msg)}
         onOpenChat={(it, who) => handleOpenChat(it, who)}
       />

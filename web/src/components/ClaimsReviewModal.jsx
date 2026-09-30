@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { X, Inbox, ShieldCheck, MapPin, Check, Ban, MessageSquare } from 'lucide-react';
 import { subscribeClaims, resolveClaim } from '../lib/claims';
+import { calculateMatchScore } from '../lib/matching';
 
 const STATUS_BADGE = {
   pending: { label: 'Pending', className: 'badge' },
@@ -20,11 +21,20 @@ const STATUS_BADGE = {
  * Rendering is gated on ownership by the caller, but that is only a convenience:
  * firestore.rules is what actually restricts resolution to the item's poster.
  */
-export default function ClaimsReviewModal({ isOpen, onClose, item, onToast, onOpenChat }) {
+export default function ClaimsReviewModal({ isOpen, onClose, item, items = [], onToast, onOpenChat }) {
   const [claims, setClaims] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState(null);
+
+  // Resolve a claim's linked report to something displayable. The feed only
+  // holds open posts, so a linked report that has since been resolved may not
+  // be here — in that case the caller falls back to a bare acknowledgement.
+  const linkedFor = (c) => {
+    const linked = items.find((i) => i.id === c.viaItemId);
+    if (!linked) return null;
+    return { title: linked.title, score: calculateMatchScore(item, linked).score };
+  };
 
   useEffect(() => {
     if (!isOpen || !item?.id) return undefined;
@@ -190,6 +200,33 @@ export default function ClaimsReviewModal({ isOpen, onClose, item, onToast, onOp
                     </div>
                     {c.proof || <span style={{ color: 'var(--ink-muted)' }}>No proof supplied.</span>}
                   </div>
+
+                  {/* Corroboration: they pointed at their own report of the
+                      opposite type. The rules already verified it is theirs,
+                      so the only question left is whether it describes the
+                      same object — hence the score. */}
+                  {c.viaItemId && (
+                    <div
+                      style={{
+                        fontSize: 'var(--text-xs)',
+                        color: 'var(--ink-secondary)',
+                        background: 'color-mix(in srgb, var(--accent) 7%, transparent)',
+                        border: '1px solid color-mix(in srgb, var(--accent) 22%, transparent)',
+                        borderRadius: 'var(--radius-sm)',
+                        padding: '7px 10px',
+                        marginBottom: 8,
+                      }}
+                    >
+                      {linkedFor(c) ? (
+                        <>
+                          <strong>Linked to their own report:</strong> {linkedFor(c).title}
+                          {linkedFor(c).score != null && <> — {linkedFor(c).score}% match</>}
+                        </>
+                      ) : (
+                        <>They linked one of their own reports.</>
+                      )}
+                    </div>
+                  )}
 
                   {c.message && (
                     <p style={{ fontSize: 'var(--text-sm)', color: 'var(--ink-secondary)', marginBottom: 8 }}>{c.message}</p>
